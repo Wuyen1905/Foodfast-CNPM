@@ -6,7 +6,6 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
-  username: string;
   password: string;
   fullName: string;
   email: string;
@@ -22,7 +21,16 @@ export interface LoginResponse {
 
 export interface RegisterResponse {
   ok: boolean;
-  data?: any;
+  data?: {
+    id: string;
+    name: string;
+    username: string;
+    email?: string;
+    phone?: string;
+    role: string;
+    orderCount?: number;
+    createdAt?: number;
+  };
   message?: string;
 }
 

@@ -16,8 +16,13 @@ import java.util.regex.Pattern;
 @Service
 public class AuthService {
 
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
-    private static final Pattern VIETNAM_PHONE_PATTERN = Pattern.compile("^0\\d{9}$");
+    private static final Pattern NAME_PATTERN = Pattern.compile("^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]*$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+            "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,63}$",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern VIETNAM_PHONE_PATTERN = Pattern.compile("^0(?:3|5|7|8|9)\\d{8}$");
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*\\p{L})(?=.*\\d)\\S{8,64}$");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -52,17 +57,9 @@ public class AuthService {
         }
 
         String storedPassword = user.getPassword();
-        boolean encoded = storedPassword != null && storedPassword.startsWith("$2");
-        boolean matches = encoded
-                ? passwordEncoder.matches(password, storedPassword)
-                : storedPassword != null && storedPassword.equals(password);
-        if (!matches) {
+        if (storedPassword == null || !storedPassword.startsWith("$2")
+                || !passwordEncoder.matches(password, storedPassword)) {
             throw new RuntimeException("Mật khẩu không đúng");
-        }
-
-        // Tự nâng cấp dữ liệu cũ còn mật khẩu thô ngay lần đăng nhập đầu tiên.
-        if (!encoded) {
-            user.setPassword(passwordEncoder.encode(password));
         }
         user.setLastLoginAt(System.currentTimeMillis());
         userRepository.save(user);
@@ -71,25 +68,25 @@ public class AuthService {
     }
 
     @Transactional
-    public User register(String username, String password, String name, String email, String phone) {
-        String normalizedName = name == null ? "" : name.trim();
+    public User register(String password, String name, String email, String phone) {
+        String normalizedName = name == null ? "" : name.trim().replaceAll("\\s+", " ");
         String normalizedEmail = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
-        String normalizedUsername = username == null || username.isBlank()
-                ? normalizedEmail
-                : username.trim().toLowerCase(Locale.ROOT);
+        // Tài khoản khách hàng dùng email đã chuẩn hóa làm định danh đăng nhập.
+        String normalizedUsername = normalizedEmail;
         String normalizedPhone = normalizePhoneOrNull(phone);
 
-        if (normalizedName.length() < 2) {
-            throw new IllegalArgumentException("Họ tên phải có ít nhất 2 ký tự");
+        if (normalizedName.length() < 2 || normalizedName.length() > 100
+                || !NAME_PATTERN.matcher(normalizedName).matches()) {
+            throw new IllegalArgumentException("Họ tên phải từ 2 đến 100 ký tự và chỉ gồm chữ, khoảng trắng, dấu nháy hoặc gạch nối");
         }
-        if (!EMAIL_PATTERN.matcher(normalizedEmail).matches()) {
+        if (normalizedEmail.length() > 100 || !EMAIL_PATTERN.matcher(normalizedEmail).matches()) {
             throw new IllegalArgumentException("Email không hợp lệ");
         }
         if (normalizedPhone == null) {
             throw new IllegalArgumentException("Số điện thoại không hợp lệ");
         }
-        if (password == null || password.length() < 6) {
-            throw new IllegalArgumentException("Mật khẩu phải có ít nhất 6 ký tự");
+        if (password == null || !PASSWORD_PATTERN.matcher(password).matches()) {
+            throw new IllegalArgumentException("Mật khẩu phải từ 8 đến 64 ký tự, có ít nhất một chữ và một số, không chứa khoảng trắng");
         }
 
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {

@@ -13,9 +13,20 @@ describe('checkoutSchema', () => {
     await expect(checkoutSchema.validate(validForm)).resolves.toMatchObject(validForm);
   });
 
-  it('requires a complete delivery address', async () => {
-    await expect(checkoutSchema.validate({ ...validForm, address: '123' }))
-      .rejects.toThrow('ít nhất 10 ký tự');
+  it('accepts a short free-form delivery instruction', async () => {
+    await expect(checkoutSchema.validate({ ...validForm, address: 'KTX A' }))
+      .resolves.toMatchObject({ address: 'KTX A' });
+  });
+
+  it('does not impose an arbitrary character limit on the delivery address', async () => {
+    const longAddress = 'Khu A, '.repeat(500);
+    await expect(checkoutSchema.validate({ ...validForm, address: longAddress }))
+      .resolves.toMatchObject({ address: longAddress.trim() });
+  });
+
+  it('still requires a non-empty delivery address', async () => {
+    await expect(checkoutSchema.validate({ ...validForm, address: '   ' }))
+      .rejects.toThrow('bắt buộc');
   });
 
   it('only accepts payment methods shown on the page', async () => {

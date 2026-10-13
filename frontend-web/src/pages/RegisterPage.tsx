@@ -186,13 +186,27 @@ const RegisterPage: React.FC = () => {
 
   // Validation functions
   const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63}$/i;
+    return email.length <= 100 && emailRegex.test(email.trim());
   };
 
   const validatePhone = (phone: string): boolean => {
     const digits = phone.replace(/\D/g, '');
-    return /^0\d{9}$/.test(digits) || /^84\d{9}$/.test(digits);
+    const normalized = digits.startsWith('84') && digits.length === 11
+      ? `0${digits.slice(2)}`
+      : digits;
+    return /^0(?:3|5|7|8|9)\d{8}$/.test(normalized);
+  };
+
+  const validateName = (name: string): boolean => {
+    const normalized = name.trim().replace(/\s+/g, ' ');
+    return normalized.length >= 2
+      && normalized.length <= 100
+      && /^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u.test(normalized);
+  };
+
+  const validatePassword = (password: string): boolean => {
+    return /^(?=.*\p{L})(?=.*\d)\S{8,64}$/u.test(password);
   };
 
   const validateForm = (): boolean => {
@@ -201,8 +215,8 @@ const RegisterPage: React.FC = () => {
     // Full name validation
     if (!formData.fullName.trim()) {
       newErrors.fullName = "Họ tên là bắt buộc";
-    } else if (formData.fullName.trim().length < 2) {
-      newErrors.fullName = "Họ tên phải có ít nhất 2 ký tự";
+    } else if (!validateName(formData.fullName)) {
+      newErrors.fullName = "Họ tên phải từ 2 đến 100 ký tự và chỉ gồm chữ, khoảng trắng, dấu nháy hoặc gạch nối";
     }
 
     // Email validation
@@ -215,14 +229,14 @@ const RegisterPage: React.FC = () => {
     if (!formData.phone.trim()) {
       newErrors.phone = "Số điện thoại là bắt buộc";
     } else if (!validatePhone(formData.phone)) {
-      newErrors.phone = "Số điện thoại phải có dạng 0xxxxxxxxx hoặc 84xxxxxxxxx";
+      newErrors.phone = "Số điện thoại Việt Nam không hợp lệ (ví dụ: 0901234567)";
     }
 
     // Password validation
     if (!formData.password) {
       newErrors.password = "Mật khẩu là bắt buộc";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Mật khẩu phải có ít nhất 6 ký tự";
+    } else if (!validatePassword(formData.password)) {
+      newErrors.password = "Mật khẩu phải từ 8 đến 64 ký tự, có ít nhất một chữ và một số, không chứa khoảng trắng";
     }
 
     // Confirm password validation
@@ -263,8 +277,8 @@ const RegisterPage: React.FC = () => {
 
     try {
       const result = await register({
-        fullName: formData.fullName.trim(),
-        email: formData.email.trim(),
+        fullName: formData.fullName.trim().replace(/\s+/g, ' '),
+        email: formData.email.trim().toLowerCase(),
         phone: formData.phone.trim(),
         password: formData.password
       });
@@ -287,11 +301,11 @@ const RegisterPage: React.FC = () => {
   };
 
   const isFormValid = () => {
-    const hasValidFields = formData.fullName.trim() &&
+    const hasValidFields = validateName(formData.fullName) &&
            formData.email.trim() &&
            validateEmail(formData.email) &&
            validatePhone(formData.phone) &&
-           formData.password.length >= 6 &&
+           validatePassword(formData.password) &&
            formData.confirmPassword === formData.password;
     
     const hasNoErrors = Object.values(errors).every(error => !error);
@@ -324,6 +338,8 @@ const RegisterPage: React.FC = () => {
               <StyledInput
                 type="text"
                 placeholder="Họ và tên"
+                autoComplete="name"
+                maxLength={100}
                 value={formData.fullName}
                 onChange={(e) => handleInputChange('fullName', e.target.value)}
                 disabled={busy}
@@ -349,6 +365,7 @@ const RegisterPage: React.FC = () => {
                 inputMode="numeric"
                 autoComplete="tel"
                 placeholder="Số điện thoại"
+                maxLength={11}
                 value={formData.phone}
                 onChange={(e) => handleInputChange('phone', formatPhoneNumber(e.target.value))}
                 disabled={busy}
@@ -372,6 +389,8 @@ const RegisterPage: React.FC = () => {
               <StyledInput
                 type="email"
                 placeholder="Email"
+                autoComplete="email"
+                maxLength={100}
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 disabled={busy}
@@ -394,7 +413,9 @@ const RegisterPage: React.FC = () => {
               <InputIcon>🔒</InputIcon>
               <StyledInput
                 type="password"
-                placeholder="Mật khẩu (tối thiểu 6 ký tự)"
+                placeholder="Mật khẩu (8–64 ký tự, có chữ và số)"
+                autoComplete="new-password"
+                maxLength={64}
                 value={formData.password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
                 disabled={busy}
@@ -418,6 +439,8 @@ const RegisterPage: React.FC = () => {
               <StyledInput
                 type="password"
                 placeholder="Xác nhận mật khẩu"
+                autoComplete="new-password"
+                maxLength={64}
                 value={formData.confirmPassword}
                 onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
                 disabled={busy}

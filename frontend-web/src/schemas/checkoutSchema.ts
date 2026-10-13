@@ -9,9 +9,7 @@ export const checkoutSchema = yup.object({
   address: yup
     .string()
     .trim()
-    .required('Địa chỉ giao hàng là bắt buộc')
-    .min(10, 'Địa chỉ giao hàng phải có ít nhất 10 ký tự')
-    .max(250, 'Địa chỉ giao hàng không được quá 250 ký tự'),
+    .required('Địa chỉ giao hàng là bắt buộc'),
 
   note: yup
     .string()

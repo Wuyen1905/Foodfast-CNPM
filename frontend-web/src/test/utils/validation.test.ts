@@ -63,8 +63,8 @@ describe('Validation Utils', () => {
     });
 
     it('rejects addresses that are too short or long', () => {
-      expect(validateAddress('123')).toBeTruthy(); // Too short
-      expect(validateAddress('A'.repeat(201))).toBeTruthy(); // Too long
+      expect(validateAddress('KTX A')).toBeNull();
+      expect(validateAddress('A'.repeat(2000))).toBeNull();
       expect(validateAddress('')).toBeTruthy(); // Empty
     });
   });

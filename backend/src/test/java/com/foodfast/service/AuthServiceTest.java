@@ -33,8 +33,7 @@ class AuthServiceTest {
     @Test
     void registerNormalizesCustomerIdentity() {
         User user = authService.register(
-                null,
-                "secret1",
+                "secret12",
                 "  Nguyễn Văn A  ",
                 "  Customer@Example.COM ",
                 "+84 912 345 678"
@@ -47,7 +46,7 @@ class AuthServiceTest {
         assertThat(user.getName()).isEqualTo("Nguyễn Văn A");
         assertThat(user.getRole()).isEqualTo("customer");
         assertThat(user.getPassword()).startsWith("$2");
-        assertThat(passwordEncoder.matches("secret1", user.getPassword())).isTrue();
+        assertThat(passwordEncoder.matches("secret12", user.getPassword())).isTrue();
     }
 
     @Test
@@ -56,7 +55,7 @@ class AuthServiceTest {
         when(userRepository.findByUsernameIgnoreCase("customer@example.com")).thenReturn(Optional.empty());
         when(userRepository.findByEmailIgnoreCase("customer@example.com")).thenReturn(Optional.of(user));
 
-        assertThat(authService.authenticate("Customer@Example.com", "secret1")).isSameAs(user);
+        assertThat(authService.authenticate("Customer@Example.com", "secret12")).isSameAs(user);
     }
 
     @Test
@@ -66,7 +65,7 @@ class AuthServiceTest {
         when(userRepository.findByEmailIgnoreCase("+84912345678")).thenReturn(Optional.empty());
         when(userRepository.findByPhone("0912345678")).thenReturn(Optional.of(user));
 
-        assertThat(authService.authenticate("+84912345678", "secret1")).isSameAs(user);
+        assertThat(authService.authenticate("+84912345678", "secret12")).isSameAs(user);
     }
 
     @Test
@@ -74,8 +73,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase("customer@example.com")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.register(
-                "customer@example.com",
-                "secret1",
+                "secret12",
                 "Nguyễn Văn A",
                 "Customer@Example.com",
                 "0912345678"
@@ -86,8 +84,7 @@ class AuthServiceTest {
     @Test
     void invalidPhoneIsRejected() {
         assertThatThrownBy(() -> authService.register(
-                "customer@example.com",
-                "secret1",
+                "secret12",
                 "Nguyễn Văn A",
                 "customer@example.com",
                 "123"
@@ -100,8 +97,7 @@ class AuthServiceTest {
         when(userRepository.existsByPhone("0912345678")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.register(
-                "another@example.com",
-                "secret1",
+                "secret12",
                 "Nguyễn Văn B",
                 "another@example.com",
                 "0912345678"
@@ -115,13 +111,45 @@ class AuthServiceTest {
                 .thenThrow(new DataIntegrityViolationException("unique constraint"));
 
         assertThatThrownBy(() -> authService.register(
-                "race@example.com",
-                "secret1",
+                "secret12",
                 "Nguyễn Văn C",
                 "race@example.com",
                 "0909999999"
         )).isInstanceOf(IllegalArgumentException.class)
           .hasMessage("Email, số điện thoại hoặc tên đăng nhập đã được sử dụng");
+    }
+
+    @Test
+    void weakPasswordIsRejected() {
+        assertThatThrownBy(() -> authService.register(
+                "password",
+                "Nguyễn Văn A",
+                "customer@example.com",
+                "0912345678"
+        )).isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("ít nhất một chữ và một số");
+    }
+
+    @Test
+    void invalidNameAndEmailAreRejected() {
+        assertThatThrownBy(() -> authService.register(
+                "secret12",
+                "12345",
+                "not-an-email",
+                "0912345678"
+        )).isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("Họ tên");
+    }
+
+    @Test
+    void plaintextPasswordIsNeverAccepted() {
+        User user = customer();
+        user.setPassword("secret12");
+        when(userRepository.findByUsernameIgnoreCase("customer@example.com")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.authenticate("customer@example.com", "secret12"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Mật khẩu không đúng");
     }
 
     private User customer() {
@@ -130,7 +158,7 @@ class AuthServiceTest {
         user.setUsername("customer@example.com");
         user.setEmail("customer@example.com");
         user.setPhone("0912345678");
-        user.setPassword("secret1");
+        user.setPassword(passwordEncoder.encode("secret12"));
         user.setName("Nguyễn Văn A");
         user.setRole("customer");
         return user;

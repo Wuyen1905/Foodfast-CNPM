@@ -20,8 +20,6 @@ export const VALIDATION_MESSAGES = {
   },
   ADDRESS: {
     REQUIRED: 'Vui lòng nhập địa chỉ giao hàng',
-    MIN_LENGTH: `Địa chỉ phải có ít nhất ${VALIDATION_RULES.ADDRESS.MIN_LENGTH} ký tự`,
-    MAX_LENGTH: `Địa chỉ không được vượt quá ${VALIDATION_RULES.ADDRESS.MAX_LENGTH} ký tự`,
   },
   PAYMENT: {
     REQUIRED: 'Vui lòng chọn phương thức thanh toán',
@@ -76,14 +74,6 @@ export const validatePhone = (phone: string): string | null => {
 export const validateAddress = (address: string): string | null => {
   if (!address || address.trim().length === 0) {
     return VALIDATION_MESSAGES.ADDRESS.REQUIRED;
-  }
-  
-  if (address.length < VALIDATION_RULES.ADDRESS.MIN_LENGTH) {
-    return VALIDATION_MESSAGES.ADDRESS.MIN_LENGTH;
-  }
-  
-  if (address.length > VALIDATION_RULES.ADDRESS.MAX_LENGTH) {
-    return VALIDATION_MESSAGES.ADDRESS.MAX_LENGTH;
   }
   
   return null;

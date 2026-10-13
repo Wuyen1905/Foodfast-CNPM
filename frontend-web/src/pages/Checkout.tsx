@@ -270,7 +270,7 @@ const VNPayQRCode = styled.div`
 
 const Checkout: React.FC = () => {
   const { user } = useAuth();
-  const { addOrder, getOrdersByPhone } = useOrders();
+  const { addOrder } = useOrders();
   const { items, clear } = useCart();
   const navigate = useNavigate();
   
@@ -506,19 +506,6 @@ const Checkout: React.FC = () => {
       return;
     }
     
-    // Check order limit
-    const existingOrders = getOrdersByPhone(form.phone);
-    const activeOrders = existingOrders.filter((order: any) => 
-      order.status === "Processing" || order.status === "Delivering" || 
-      order.status === "Đang xử lý" || order.status === "Đang giao hàng" ||
-      order.status === "Pending" || order.status === "In Progress"
-    );
-    
-    if (activeOrders.length >= 2) {
-      toast.error("Bạn đã đặt nhiều hơn số đơn hàng quy định! Chờ một xíu nhé!");
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -698,7 +685,7 @@ const Checkout: React.FC = () => {
                 name="address"
                 value={form.address}
                 onChange={(event) => { setSelectedAddressId(''); handleChange(event); }}
-                placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành phố"
+                placeholder="Nhập địa chỉ hoặc hướng dẫn giao hàng theo cách của bạn"
                 as="textarea"
                 rows={3}
                 hasError={!!errors.address}

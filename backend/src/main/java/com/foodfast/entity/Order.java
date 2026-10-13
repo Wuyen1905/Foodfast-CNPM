@@ -9,6 +9,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -38,7 +39,8 @@ public class Order {
 
     private String customerEmail;
 
-    @Column(length = 512)
+    @Lob
+    @Column
     private String address;
 
     private String restaurant;

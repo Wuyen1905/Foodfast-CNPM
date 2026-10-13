@@ -3,6 +3,7 @@ package com.foodfast.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 @Entity
@@ -25,7 +26,8 @@ public class DeliveryAddress {
     @Column(length = 20, nullable = false)
     private String phone;
 
-    @Column(name = "address_line", length = 500, nullable = false)
+    @Lob
+    @Column(name = "address_line", nullable = false)
     private String addressLine;
 
     @Column(name = "is_default", nullable = false)

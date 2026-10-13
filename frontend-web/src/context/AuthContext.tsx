@@ -95,15 +95,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { ok: false, message: "Vui lòng điền đầy đủ thông tin" };
       }
 
-      // Dùng toàn bộ email làm định danh để tránh trùng phần trước dấu @.
-      const username = payload.email.trim().toLowerCase();
-
       // Call backend API
       const response = await apiRegister({
-        username,
         password: payload.password,
-        fullName: payload.fullName,
-        email: payload.email,
+        fullName: payload.fullName.trim(),
+        email: payload.email.trim().toLowerCase(),
         phone: payload.phone
       });
 

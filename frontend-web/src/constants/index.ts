@@ -2,7 +2,6 @@
 export const APP_CONFIG = {
   NAME: 'FoodFast',
   VERSION: '1.0.0',
-  MAX_ORDERS_PER_PHONE: 2,
   DEFAULT_CURRENCY: 'VND',
   SUPPORTED_CURRENCIES: ['VND', 'USD'],
 } as const;
@@ -36,10 +35,6 @@ export const VALIDATION_RULES = {
     PATTERN: /^(0[0-9]{9}|\+84[0-9]{9})$/,
     MIN_LENGTH: 10,
     MAX_LENGTH: 11,
-  },
-  ADDRESS: {
-    MIN_LENGTH: 10,
-    MAX_LENGTH: 200,
   },
 } as const;
 

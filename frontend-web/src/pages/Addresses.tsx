@@ -164,7 +164,13 @@ const Addresses: React.FC = () => {
               <input value={form.phone} maxLength={20} required onChange={e => setForm({ ...form, phone: e.target.value })} />
             </label>
             <label>Địa chỉ đầy đủ
-              <textarea rows={4} value={form.addressLine} maxLength={500} required onChange={e => setForm({ ...form, addressLine: e.target.value })} />
+              <textarea
+                rows={4}
+                value={form.addressLine}
+                required
+                placeholder="Nhập tự do địa chỉ và hướng dẫn giao hàng"
+                onChange={e => setForm({ ...form, addressLine: e.target.value })}
+              />
             </label>
             <label style={{ display: 'flex', gridTemplateColumns: 'auto 1fr', alignItems: 'center' }}>
               <input type="checkbox" style={{ width: 18 }} checked={form.defaultAddress} onChange={e => setForm({ ...form, defaultAddress: e.target.checked })} />

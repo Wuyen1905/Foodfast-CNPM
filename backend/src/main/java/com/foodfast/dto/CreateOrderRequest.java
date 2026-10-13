@@ -1,6 +1,7 @@
 package com.foodfast.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 
 public class CreateOrderRequest {
@@ -9,6 +10,7 @@ public class CreateOrderRequest {
     public String customerName;
     public String customerPhone;
     public String customerEmail;
+    @NotBlank(message = "Vui lòng nhập địa chỉ giao hàng")
     public String address;
     public String note;
     public String restaurantId;

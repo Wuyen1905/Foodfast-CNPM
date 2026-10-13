@@ -18,7 +18,6 @@ public record DeliveryAddressRequest(
         String phone,
 
         @NotBlank(message = "Vui lòng nhập địa chỉ giao hàng")
-        @Size(min = 10, max = 500, message = "Địa chỉ phải từ 10 đến 500 ký tự")
         String addressLine,
 
         boolean defaultAddress

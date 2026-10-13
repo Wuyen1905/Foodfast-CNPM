@@ -5,9 +5,13 @@ import com.foodfast.repository.UserRepository;
 import com.foodfast.service.AuthService;
 import com.foodfast.security.CurrentUserService;
 import com.foodfast.security.JwtService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -59,21 +62,10 @@ public class AuthController {
         try {
             User user = authService.authenticate(request.username, request.password);
 
-            Map<String, Object> userMap = new HashMap<>();
-            userMap.put("id", user.getId());
-            userMap.put("username", user.getUsername());
-            userMap.put("role", user.getRole());
-            userMap.put("restaurantId", user.getRestaurantId());
-            userMap.put("name", user.getName());
-            userMap.put("email", user.getEmail());
-            userMap.put("phone", user.getPhone());
-            userMap.put("orderCount", user.getOrderCount());
-            userMap.put("createdAt", user.getCreatedAt());
-
             Map<String, Object> response = new HashMap<>();
             response.put("ok", true);
             response.put("token", jwtService.createToken(user));
-            response.put("user", userMap);
+            response.put("user", safeUser(user));
 
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
@@ -85,31 +77,13 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<Map<String, Object>> me() {
         User user = currentUserService.requireUser();
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("id", user.getId());
-        userMap.put("username", user.getUsername());
-        userMap.put("role", user.getRole());
-        userMap.put("restaurantId", user.getRestaurantId());
-        userMap.put("name", user.getName());
-        userMap.put("email", user.getEmail());
-        userMap.put("phone", user.getPhone());
-        userMap.put("orderCount", user.getOrderCount());
-        userMap.put("createdAt", user.getCreatedAt());
-        return ResponseEntity.ok(userMap);
+        return ResponseEntity.ok(safeUser(user));
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
         try {
-            if (!StringUtils.hasText(request.password) || !StringUtils.hasText(request.fullName) ||
-                !StringUtils.hasText(request.email) ||
-                !StringUtils.hasText(request.phone)) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("ok", false, "message", "Vui lòng điền đầy đủ thông tin"));
-            }
-
             User user = authService.register(
-                    request.username,
                     request.password,
                     request.fullName,
                     request.email,
@@ -118,7 +92,7 @@ public class AuthController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("ok", true);
-            response.put("data", user);
+            response.put("data", safeUser(user));
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
@@ -135,11 +109,38 @@ public class AuthController {
     }
 
     public static class RegisterRequest {
-        public String username;
+        @NotBlank(message = "Vui lòng nhập mật khẩu")
+        @Size(min = 8, max = 64, message = "Mật khẩu phải từ 8 đến 64 ký tự")
+        @Pattern(regexp = "^(?=.*\\p{L})(?=.*\\d)\\S+$", message = "Mật khẩu phải có ít nhất một chữ và một số, không chứa khoảng trắng")
         public String password;
+
+        @NotBlank(message = "Vui lòng nhập họ tên")
+        @Size(min = 2, max = 100, message = "Họ tên phải từ 2 đến 100 ký tự")
+        @Pattern(regexp = "^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]*$", message = "Họ tên chỉ được gồm chữ, khoảng trắng, dấu nháy hoặc gạch nối")
         public String fullName;
+
+        @NotBlank(message = "Vui lòng nhập email")
+        @Size(max = 100, message = "Email tối đa 100 ký tự")
+        @Email(message = "Email không hợp lệ")
         public String email;
+
+        @NotBlank(message = "Vui lòng nhập số điện thoại")
+        @Size(max = 20, message = "Số điện thoại không hợp lệ")
         public String phone;
+    }
+
+    private Map<String, Object> safeUser(User user) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", user.getId());
+        result.put("username", user.getUsername());
+        result.put("role", user.getRole());
+        result.put("restaurantId", user.getRestaurantId());
+        result.put("name", user.getName());
+        result.put("email", user.getEmail());
+        result.put("phone", user.getPhone());
+        result.put("orderCount", user.getOrderCount());
+        result.put("createdAt", user.getCreatedAt());
+        return result;
     }
 }
 
