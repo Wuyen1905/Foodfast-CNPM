@@ -1,0 +1,75 @@
+# Dependencies
+**/node_modules/
+
+# Build and test outputs
+**/dist/
+**/build/
+**/target/
+**/.vite/
+**/coverage/
+**/.nyc_output/
+*.tsbuildinfo
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+!backend/.env.vnpay.local.example
+!frontend-web/.env.development
+!frontend-web/.env.production
+backend/.env.vnpay.local
+
+# Runtime data and uploaded evidence
+backend/runtime-data/
+/backend/data/
+*.mv.db
+*.trace.db
+*.lock.db
+**/complaint-evidence/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+.tmp*/
+*.tmp
+**/check-log.txt
+/allfiles.txt
+
+# Local analysis and generated working artifacts
+analysis/
+artifacts/
+diagnostics/
+.publish/
+
+# Old local copies that are not part of the published project
+/src/
+/web/
+/tools/
+/node_modules/
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Signing and unused mobile tool outputs
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/

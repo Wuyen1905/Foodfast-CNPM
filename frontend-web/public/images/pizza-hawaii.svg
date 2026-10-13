@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" role="img" aria-labelledby="title description">
+  <title id="title">Pizza Hawaii</title>
+  <desc id="description">Pizza phô mai với thịt nguội, dứa và rau thơm trên đĩa trắng.</desc>
+  <defs>
+    <radialGradient id="background" cx="50%" cy="42%" r="75%">
+      <stop offset="0" stop-color="#fff9ee"/>
+      <stop offset="1" stop-color="#ead7bd"/>
+    </radialGradient>
+    <radialGradient id="cheese" cx="46%" cy="38%" r="66%">
+      <stop offset="0" stop-color="#ffd965"/>
+      <stop offset="0.72" stop-color="#f4ad32"/>
+      <stop offset="1" stop-color="#dc7d1f"/>
+    </radialGradient>
+    <linearGradient id="crust" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d88b38"/>
+      <stop offset="0.5" stop-color="#a95820"/>
+      <stop offset="1" stop-color="#713415"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#5b2d10" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <rect width="960" height="640" fill="url(#background)"/>
+  <ellipse cx="480" cy="340" rx="372" ry="242" fill="#fefefe" stroke="#e1d8cc" stroke-width="16" filter="url(#shadow)"/>
+  <ellipse cx="480" cy="356" rx="302" ry="184" fill="#b87534" opacity="0.16"/>
+
+  <g filter="url(#shadow)">
+    <ellipse cx="480" cy="324" rx="292" ry="218" fill="url(#crust)"/>
+    <ellipse cx="480" cy="310" rx="258" ry="184" fill="url(#cheese)" stroke="#efb341" stroke-width="8"/>
+
+    <g fill="#d84a3e" stroke="#a92728" stroke-width="7">
+      <circle cx="362" cy="222" r="39"/>
+      <circle cx="526" cy="201" r="41"/>
+      <circle cx="622" cy="315" r="38"/>
+      <circle cx="488" cy="387" r="42"/>
+      <circle cx="327" cy="366" r="37"/>
+    </g>
+    <g fill="#f7c94f" stroke="#e29a2c" stroke-width="6">
+      <path d="M423 246l48 14-17 45-48-14z"/>
+      <path d="M566 251l43 20-24 43-43-21z"/>
+      <path d="M398 339l46 12-15 47-47-13z"/>
+      <path d="M526 310l47 15-18 46-45-17z"/>
+      <path d="M290 283l43 16-19 44-43-18z"/>
+    </g>
+    <g fill="#fff1b8" opacity="0.9">
+      <ellipse cx="414" cy="188" rx="24" ry="12" transform="rotate(-18 414 188)"/>
+      <ellipse cx="579" cy="391" rx="25" ry="11" transform="rotate(24 579 391)"/>
+      <ellipse cx="287" cy="250" rx="23" ry="10" transform="rotate(30 287 250)"/>
+      <ellipse cx="477" cy="297" rx="27" ry="12" transform="rotate(-10 477 297)"/>
+    </g>
+    <g fill="#378a46">
+      <ellipse cx="375" cy="304" rx="10" ry="22" transform="rotate(32 375 304)"/>
+      <ellipse cx="548" cy="252" rx="9" ry="21" transform="rotate(-24 548 252)"/>
+      <ellipse cx="585" cy="355" rx="10" ry="23" transform="rotate(38 585 355)"/>
+      <ellipse cx="432" cy="421" rx="9" ry="20" transform="rotate(-36 432 421)"/>
+      <ellipse cx="330" cy="319" rx="8" ry="19" transform="rotate(-16 330 319)"/>
+    </g>
+  </g>
+
+  <g fill="#4d8f50" opacity="0.9">
+    <path d="M742 438c-54 15-78 50-94 89 55-14 83-41 94-89z"/>
+    <path d="M702 421c-45 6-72 31-93 63 50-3 79-23 93-63z"/>
+    <path d="M762 475c-37 19-51 46-58 79 39-16 58-40 58-79z"/>
+  </g>
+</svg>
