@@ -69,6 +69,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/restaurants", "/api/restaurants/*",
                                 "/api/restaurants/*/reviews").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/manager/**").hasRole("MANAGER")
                         .requestMatchers("/api/auth/users").hasRole("ADMIN")
                         .requestMatchers("/api/customer-notifications/**").hasRole("CUSTOMER")
                         .requestMatchers("/api/analytics/**", "/api/notifications/**")
@@ -78,14 +79,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/orders", "/orders",
                                 "/api/orders/quote", "/orders/quote")
                                 .hasRole("CUSTOMER")
-                        .requestMatchers("/api/cart/**", "/api/payment/vnpay/create")
+                        .requestMatchers(HttpMethod.POST, "/api/order-groups", "/api/order-groups/quote")
+                                .hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/order-groups", "/api/order-groups/*")
+                                .hasAnyRole("CUSTOMER", "ADMIN")
+                        .requestMatchers("/api/cart/**", "/api/payment/vnpay/create",
+                                "/api/payment/vnpay/groups/*/create")
                                 .hasRole("CUSTOMER")
                         .requestMatchers("/api/favorites/**", "/api/addresses/**")
                                 .hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/api/complaints", "/api/complaints/evidence")
                                 .hasRole("CUSTOMER")
-                        .requestMatchers(HttpMethod.PATCH, "/api/complaints/*/refund/complete")
-                                .hasRole("ADMIN")
                         .requestMatchers("/api/complaints/**")
                                 .hasAnyRole("CUSTOMER", "RESTAURANT", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/orders/*/review").hasRole("CUSTOMER")

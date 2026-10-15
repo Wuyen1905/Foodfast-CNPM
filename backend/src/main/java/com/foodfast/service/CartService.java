@@ -7,21 +7,17 @@ import com.foodfast.entity.OrderStatus;
 import com.foodfast.entity.Product;
 import com.foodfast.repository.CartItemRepository;
 import com.foodfast.repository.OrderRepository;
-import com.foodfast.repository.ProductRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 public class CartService {
 
     private final CartItemRepository cartItemRepository;
-    private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final RealtimeService realtimeService;
     private final ProductOptionPricingService optionPricingService;
@@ -29,14 +25,12 @@ public class CartService {
 
     public CartService(
             CartItemRepository cartItemRepository,
-            ProductRepository productRepository,
             OrderRepository orderRepository,
             RealtimeService realtimeService,
             ProductOptionPricingService optionPricingService,
             ProductAvailabilityService productAvailabilityService
     ) {
         this.cartItemRepository = cartItemRepository;
-        this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.realtimeService = realtimeService;
         this.optionPricingService = optionPricingService;
@@ -83,15 +77,6 @@ public class CartService {
         }
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalStateException("Đơn hàng cũ không có món để đặt lại");
-        }
-
-        String cartRestaurantId = resolveCartRestaurant(
-                cartItemRepository.findByUserIdOrderByIdAsc(normalizedUserId)
-        );
-        if (cartRestaurantId != null
-                && !RestaurantIdentityPolicy.refersToSameRestaurant(
-                        cartRestaurantId, order.getRestaurantId())) {
-            throw new CartRestaurantConflictException(cartRestaurantId, order.getRestaurantId());
         }
 
         List<OrderItem> copyableItems = new ArrayList<>();
@@ -148,20 +133,6 @@ public class CartService {
                 product, selectedOptionIds, itemNote
         );
         String requestedRestaurantId = restaurantIdOf(product);
-        List<CartItem> currentCart = cartItemRepository.findByUserIdOrderByIdAsc(normalizedUserId);
-        String currentRestaurantId = resolveCartRestaurant(currentCart);
-
-        if (currentRestaurantId != null
-                && !RestaurantIdentityPolicy.refersToSameRestaurant(
-                        currentRestaurantId,
-                        requestedRestaurantId
-                )) {
-            throw new CartRestaurantConflictException(
-                    currentRestaurantId,
-                    requestedRestaurantId
-            );
-        }
-
         CartItem item = cartItemRepository
                 .findByUserIdAndVariantKey(normalizedUserId, pricing.variantKey())
                 .orElseGet(CartItem::new);
@@ -244,27 +215,6 @@ public class CartService {
     private Product requireAvailableProduct(String productId, int quantity) {
         String normalizedProductId = requireText(productId, "Mã món ăn không hợp lệ");
         return productAvailabilityService.requireOrderable(normalizedProductId, quantity, false);
-    }
-
-    private String resolveCartRestaurant(List<CartItem> items) {
-        Set<String> restaurantIds = new LinkedHashSet<>();
-        for (CartItem item : items) {
-            String restaurantId = RestaurantIdentityPolicy.canonicalize(item.getRestaurantCode());
-            if (!StringUtils.hasText(restaurantId) && StringUtils.hasText(item.getProductId())) {
-                restaurantId = productRepository.findById(item.getProductId())
-                        .map(this::restaurantIdOf)
-                        .orElse(null);
-            }
-            if (StringUtils.hasText(restaurantId)) {
-                restaurantIds.add(restaurantId);
-            }
-        }
-        if (restaurantIds.size() > 1) {
-            throw new IllegalStateException(
-                    "Giỏ hàng cũ đang chứa món của nhiều nhà hàng. Vui lòng xóa giỏ để tiếp tục"
-            );
-        }
-        return restaurantIds.stream().findFirst().orElse(null);
     }
 
     private String restaurantIdOf(Product product) {

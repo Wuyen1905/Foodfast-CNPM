@@ -87,10 +87,10 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void restaurantCannotReadAnotherRestaurantsCouriers() throws Exception {
+    void restaurantCannotReadAnotherRestaurantsDeliveries() throws Exception {
         String sweetDreamsToken = login("sweetdreams", "sweet123");
 
-        mockMvc.perform(get("/api/restaurants/restaurant_2/couriers")
+        mockMvc.perform(get("/api/restaurants/rest_1/deliveries")
                         .header("Authorization", "Bearer " + sweetDreamsToken))
                 .andExpect(status().isForbidden());
     }

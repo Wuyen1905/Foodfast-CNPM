@@ -84,6 +84,33 @@ public class PaymentController {
         }
     }
 
+    @PostMapping("/vnpay/groups/{groupId}/create")
+    public ResponseEntity<?> createGroupPayment(
+            @PathVariable String groupId,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            HttpServletRequest request
+    ) {
+        if (!vnpayService.isAvailable()) {
+            return ResponseEntity.status(503).body(Map.of(
+                    "enabled", false,
+                    "message", vnpayService.availabilityMessage()
+            ));
+        }
+        try {
+            String url = vnpayService.createGroupPaymentUrl(
+                    groupId, idempotencyKey, request,
+                    currentUserService.requireUser().getId()
+            );
+            return ResponseEntity.ok(Map.of("url", url));
+        } catch (NoSuchElementException exception) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", exception.getMessage()));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
+    }
+
     @GetMapping("/vnpay/return")
     public ResponseEntity<VNPayPaymentResult> handleReturn(@RequestParam Map<String, String> params) {
         return ResponseEntity.ok(vnpayService.handleReturn(params));
@@ -115,5 +142,16 @@ public class PaymentController {
     public ResponseEntity<VNPayPaymentResult> reconcile(@PathVariable String orderId) {
         currentUserService.requireOrderAccess(vnpayService.requireOrder(orderId));
         return ResponseEntity.ok(vnpayService.reconcile(orderId));
+    }
+
+    @GetMapping("/vnpay/groups/{groupId}/status")
+    public ResponseEntity<VNPayPaymentResult> reconcileGroup(@PathVariable String groupId) {
+        var group = vnpayService.requireGroup(groupId);
+        var user = currentUserService.requireUser();
+        if (!currentUserService.isAdmin() && !user.getId().equals(group.getUserId())) {
+            throw new com.foodfast.exception.ForbiddenOperationException(
+                    "Bạn không được xem thanh toán của nhóm đặt hàng này");
+        }
+        return ResponseEntity.ok(vnpayService.reconcileGroup(groupId));
     }
 }

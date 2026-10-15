@@ -61,6 +61,7 @@ export const vi = {
   admin: "Quản trị",
   restaurant: "Nhà hàng",
   customer: "Khách hàng",
+  manager: "Nhân viên quản lý",
   administrator: "Quản trị viên",
   
   // Cart

@@ -27,7 +27,7 @@ public class DeliveryAddress {
     private String phone;
 
     @Lob
-    @Column(name = "address_line", nullable = false)
+    @Column(name = "address_line", nullable = false, length = Integer.MAX_VALUE)
     private String addressLine;
 
     @Column(name = "is_default", nullable = false)

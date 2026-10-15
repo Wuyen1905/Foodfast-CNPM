@@ -44,8 +44,9 @@ export interface SystemLog {
   adminName: string;
   action: 'restaurant_approved' | 'restaurant_suspended' | 'restaurant_activated' | 
           'customer_suspended' | 'customer_activated' | 'courier_deactivated' |
-          'emergency_override' | 'order_status_changed';
-  targetType: 'restaurant' | 'customer' | 'courier' | 'order';
+          'emergency_override' | 'order_status_changed' | 'manager_created' |
+          'manager_updated' | 'manager_suspended' | 'manager_activated';
+  targetType: 'restaurant' | 'customer' | 'manager' | 'courier' | 'order';
   targetId: string;
   targetName: string;
   details: string;

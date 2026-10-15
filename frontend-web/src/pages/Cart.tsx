@@ -8,8 +8,8 @@ import { getAllProducts, Product } from '../data/products';
 import { formatVND } from '../utils/currency';
 import CartSkeleton from '../components/CartSkeleton';
 import toast from 'react-hot-toast';
-import { OrderQuote, quoteOrder } from '@/api/orderApi';
-import { determineRestaurantFromCartItems } from '@/services/restaurantNotificationService';
+import { OrderGroupQuote, quoteOrderGroup } from '@/api/orderApi';
+import { groupCartItemsByRestaurant } from '@/services/restaurantNotificationService';
 
 const Page = styled.div`
   padding: var(--spacing-xl) var(--spacing-lg);
@@ -118,18 +118,40 @@ const EmptyState = styled.div`
   color: var(--secondaryText);
 `;
 
+const RestaurantGroup = styled.section`
+  margin-bottom: 18px;
+  padding: 0 16px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+`;
+
+const RestaurantHeading = styled.h3`
+  margin: 0 -16px 4px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+`;
+
 const Cart: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { items, remove, setQty } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [quote, setQuote] = useState<OrderGroupQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const productMap = useMemo(() => Object.fromEntries(products.map(p => [p.id, p])), [products]);
   const subtotal = quote?.subtotal ?? 0;
   const delivery = quote?.shippingFee ?? 0;
   const total = quote?.total ?? 0;
+  const groupedItems = useMemo(() => {
+    try {
+      return groupCartItemsByRestaurant(items);
+    } catch {
+      return {};
+    }
+  }, [items]);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -152,17 +174,10 @@ const Cart: React.FC = () => {
       setQuote(null);
       return;
     }
-    const restaurantId = determineRestaurantFromCartItems(items);
-    if (!restaurantId) {
-      setQuote(null);
-      setQuoteError('Giỏ hàng chỉ được chứa món của một nhà hàng');
-      return;
-    }
     setQuoteError(null);
-    quoteOrder({
+    quoteOrderGroup({
       customerPhone: user?.phone || '0000000000',
       address: 'Chưa nhập địa chỉ',
-      restaurantId,
       items: items.map(item => ({
         productId: item.productId,
         quantity: item.qty,
@@ -233,43 +248,47 @@ const Cart: React.FC = () => {
   return (
     <Page>
       <Title>Giỏ hàng</Title>
-      {items.map((c, index) => {
-        const p = productMap[c.productId];
+      {Object.entries(groupedItems).map(([restaurantId, restaurantItems], groupIndex) => {
+        const restaurantQuote = quote?.orders.find(item => item.restaurantId === restaurantId);
         return (
-          <motion.div
-            key={c.id}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Row>
-              <Thumb
-                src={p?.image || p?.imageUrl || c.image || ''}
-                alt={c.name}
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23e8e8e8'/%3E%3Ctext x='50%25' y='54%25' font-size='11' text-anchor='middle' fill='%23aaa' font-family='sans-serif'%3EKh%C3%B4ng%20c%C3%B3%20%E1%BA%A3nh%3C/text%3E%3C/svg%3E";
-                }}
-              />
-              <div style={{ flex: 1 }}>
-                <Name>{c.name}</Name>
-                {c.optionSummary && <Sub>{c.optionSummary}</Sub>}
-                {c.itemNote && <Sub>Ghi chú: {c.itemNote}</Sub>}
-                <Sub>
-                  {formatVND(c.price)} • Số lượng:
-                  <QtyBtn onClick={() => handleQuantityChange(c.id, Math.max(1, c.qty - 1), c.name)} style={{ marginLeft: 8 }}>
-                    -
-                  </QtyBtn>
-                  <span style={{ margin: '0 8px' }}>{c.qty}</span>
-                  <QtyBtn onClick={() => handleQuantityChange(c.id, c.qty + 1, c.name)}>+</QtyBtn>
-                </Sub>
-              </div>
-              <div style={{ fontWeight: 700 }}>{formatVND(quote?.items[index]?.lineTotal ?? 0)}</div>
-              <Button onClick={() => handleRemoveItem(c.id, c.name)} style={{ background: 'var(--border)', color: 'var(--text)' }}>
-                Xóa
-              </Button>
-            </Row>
-          </motion.div>
+          <RestaurantGroup key={restaurantId}>
+            <RestaurantHeading>
+              {restaurantQuote?.restaurantName || restaurantId}
+              <small style={{ display: 'block', marginTop: 4, color: 'var(--secondaryText)', fontWeight: 400 }}>
+                Đơn riêng · phí giao hàng {formatVND(restaurantQuote?.shippingFee ?? 0)}
+              </small>
+            </RestaurantHeading>
+            {restaurantItems.map((c, index) => {
+              const p = productMap[c.productId];
+              return (
+                <motion.div key={c.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: (groupIndex + index) * 0.06 }}>
+                  <Row>
+                    <Thumb
+                      src={p?.image || p?.imageUrl || c.image || ''}
+                      alt={c.name}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23e8e8e8'/%3E%3Ctext x='50%25' y='54%25' font-size='11' text-anchor='middle' fill='%23aaa' font-family='sans-serif'%3EKh%C3%B4ng%20c%C3%B3%20%E1%BA%A3nh%3C/text%3E%3C/svg%3E";
+                      }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <Name>{c.name}</Name>
+                      {c.optionSummary && <Sub>{c.optionSummary}</Sub>}
+                      {c.itemNote && <Sub>Ghi chú: {c.itemNote}</Sub>}
+                      <Sub>
+                        {formatVND(c.price)} • Số lượng:
+                        <QtyBtn onClick={() => handleQuantityChange(c.id, Math.max(1, c.qty - 1), c.name)} style={{ marginLeft: 8 }}>-</QtyBtn>
+                        <span style={{ margin: '0 8px' }}>{c.qty}</span>
+                        <QtyBtn onClick={() => handleQuantityChange(c.id, c.qty + 1, c.name)}>+</QtyBtn>
+                      </Sub>
+                    </div>
+                    <div style={{ fontWeight: 700 }}>{formatVND(c.price * c.qty)}</div>
+                    <Button onClick={() => handleRemoveItem(c.id, c.name)} style={{ background: 'var(--border)', color: 'var(--text)' }}>Xóa</Button>
+                  </Row>
+                </motion.div>
+              );
+            })}
+          </RestaurantGroup>
         );
       })}
       
@@ -279,7 +298,7 @@ const Cart: React.FC = () => {
           <span>{formatVND(subtotal)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Phí giao hàng</span>
+          <span>Phí giao hàng ({quote?.orders.length || 0} nhà hàng)</span>
           <span>{formatVND(delivery)}</span>
         </div>
         <TotalBar>

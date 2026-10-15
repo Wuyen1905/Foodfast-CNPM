@@ -41,19 +41,12 @@ public final class SupportDeadlinePolicy {
     }
 
     public static long complaintDeadline(Complaint complaint) {
-        if (complaint.getRefundStatus() == RefundStatus.PENDING) {
-            long approvedAt = complaint.getResolvedAt() == null
-                    ? complaint.getCreatedAt()
-                    : complaint.getResolvedAt();
-            return approvedAt + FOUR_HOURS;
-        }
         return complaint.getCreatedAt() + EIGHT_HOURS;
     }
 
     public static boolean isComplaintOverdue(Complaint complaint, long now) {
-        boolean awaitingRefund = complaint.getRefundStatus() == RefundStatus.PENDING;
         boolean complaintOpen = complaint.getStatus() == ComplaintStatus.OPEN
                 || complaint.getStatus() == ComplaintStatus.REVIEWING;
-        return (awaitingRefund || complaintOpen) && complaintDeadline(complaint) < now;
+        return complaintOpen && complaintDeadline(complaint) < now;
     }
 }

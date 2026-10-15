@@ -2,6 +2,7 @@ package com.foodfast.dto;
 
 import com.foodfast.entity.Voucher;
 import com.foodfast.entity.VoucherDiscountType;
+import com.foodfast.entity.VoucherScope;
 
 import java.time.Instant;
 
@@ -9,6 +10,7 @@ public record VoucherManagementResponse(
         String code,
         String name,
         String restaurantId,
+        VoucherScope scope,
         VoucherDiscountType discountType,
         int discountValue,
         int minOrderAmount,
@@ -25,6 +27,7 @@ public record VoucherManagementResponse(
                 voucher.getCode(),
                 voucher.getName(),
                 voucher.getRestaurantId(),
+                voucher.getScope(),
                 voucher.getDiscountType(),
                 voucher.getDiscountValue(),
                 voucher.getMinOrderAmount(),

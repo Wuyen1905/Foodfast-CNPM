@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import toast from 'react-hot-toast';
-import { cancelOrder, getOrders, type Order } from '@/api/orderApi';
+import { cancelOrder, completeOrderRefund, getOrders, type Order } from '@/api/orderApi';
 import { formatVND } from '@/utils/currency';
 
 const Panel = styled.section`
@@ -131,7 +131,8 @@ const statusLabel: Record<string, string> = {
 
 const paymentLabel = (status?: string) => ({
   PAID: 'Đã thanh toán', UNPAID: 'Chưa thanh toán', PENDING: 'Đang chờ',
-  REFUND_PENDING: 'Chờ hoàn tiền', REFUNDED: 'Đã hoàn tiền', FAILED: 'Thất bại'
+  REFUND_PENDING: 'Chờ hoàn tiền', PARTIAL_REFUND_PENDING: 'Chờ hoàn một phần',
+  REFUNDED: 'Đã hoàn tiền', PARTIAL_REFUNDED: 'Đã hoàn một phần', FAILED: 'Thất bại'
 }[String(status || '').toUpperCase()] || status || 'Chưa xác định');
 
 const orderTimestamp = (value?: number) => value ? new Date(value).toLocaleString('vi-VN') : 'Chưa có';
@@ -151,6 +152,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ initialDateFilter, initialOrd
   const [selected, setSelected] = useState<Order | null>(null);
   const [cancelMode, setCancelMode] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [refundMode, setRefundMode] = useState(false);
+  const [refundReference, setRefundReference] = useState('');
+  const [refundNote, setRefundNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
@@ -186,6 +190,28 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ initialDateFilter, initialOrd
     setSelected(null);
     setCancelMode(false);
     setCancelReason('');
+    setRefundMode(false);
+    setRefundReference('');
+    setRefundNote('');
+  };
+
+  const submitRefund = async () => {
+    if (!selected || !refundReference.trim()) return;
+    setSubmitting(true);
+    try {
+      const updated = await completeOrderRefund(
+        selected.id,
+        refundReference.trim(),
+        refundNote.trim() || undefined,
+      );
+      setOrders(current => current.map(order => order.id === updated.id ? updated : order));
+      toast.success('Đã ghi nhận hoàn tiền và cập nhật nhóm đơn');
+      closeDialog();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || error?.response?.data?.message || 'Không thể hoàn tất đối soát hoàn tiền');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const submitCancellation = async () => {
@@ -215,6 +241,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ initialDateFilter, initialOrd
           <option value="all">Tất cả thanh toán</option>
           <option value="PAID">Đã thanh toán</option><option value="UNPAID">Chưa thanh toán</option>
           <option value="PENDING">Đang chờ</option><option value="REFUND_PENDING">Chờ hoàn tiền</option><option value="REFUNDED">Đã hoàn tiền</option>
+          <option value="PARTIAL_REFUND_PENDING">Chờ hoàn một phần</option><option value="PARTIAL_REFUNDED">Đã hoàn một phần</option>
         </Select>
         <Select aria-label="Lọc thời gian" value={dateFilter} onChange={event => setDateFilter(event.target.value as 'all' | 'today')}>
           <option value="all">Tất cả thời gian</option><option value="today">Hôm nay</option>
@@ -254,17 +281,30 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ initialDateFilter, initialOrd
             <strong>{formatVND((item.price || 0) * (item.quantity || item.qty || 1))}</strong>
           </div>)}</ItemList>
           <div style={{ textAlign: 'right', fontSize: 20 }}><strong>Tổng cộng: {formatVND(selected.total || 0)}</strong></div>
+          {(selected.paymentAllocatedAmount || 0) > 0 && <p><strong>VNPay phân bổ cho đơn:</strong> {formatVND(selected.paymentAllocatedAmount || 0)}</p>}
+          {(selected.partialRefundAmount || 0) > 0 && <p><strong>Số tiền cần/đã hoàn:</strong> {formatVND(selected.partialRefundAmount || 0)}</p>}
+          {selected.refundTransactionReference && <p><strong>Mã đối soát hoàn tiền:</strong> {selected.refundTransactionReference}</p>}
           {selected.cancellationReasonDetail && <p><strong>Lý do hủy:</strong> {selected.cancellationReasonDetail}</p>}
           {cancelMode && <div style={{ marginTop: 20 }}>
             <label htmlFor="admin-cancel-reason"><strong>Lý do can thiệp *</strong></label>
             <p style={{ color: '#666', margin: '6px 0 10px' }}>Lý do được lưu vĩnh viễn trong nhật ký quản trị. Không thể hoàn tác thao tác hủy.</p>
             <Reason id="admin-cancel-reason" value={cancelReason} maxLength={500} onChange={event => setCancelReason(event.target.value)} placeholder="Mô tả tình huống và căn cứ xử lý (ít nhất 5 ký tự)" />
           </div>}
+          {refundMode && <div style={{ marginTop: 20 }}>
+            <label htmlFor="admin-refund-reference"><strong>Mã giao dịch hoàn tiền *</strong></label>
+            <p style={{ color: '#666', margin: '6px 0 10px' }}>Nhập mã do VNPay/ngân hàng cung cấp sau khi đã hoàn tiền thực tế cho khách.</p>
+            <Control id="admin-refund-reference" value={refundReference} maxLength={100} onChange={event => setRefundReference(event.target.value)} placeholder="Ví dụ: REFUND-20261015-001" />
+            <label htmlFor="admin-refund-note" style={{ display: 'block', marginTop: 14 }}><strong>Ghi chú đối soát</strong></label>
+            <Reason id="admin-refund-note" value={refundNote} maxLength={1200} onChange={event => setRefundNote(event.target.value)} placeholder="Thông tin bổ sung (không bắt buộc)" />
+          </div>}
           <Actions>
             <Button $secondary onClick={closeDialog}>Đóng</Button>
-            {!['cancelled', 'delivered'].includes(normalizeStatus(selected.status)) && !cancelMode && <Button $danger onClick={() => setCancelMode(true)}>Hủy đơn ngoại lệ</Button>}
+            {!['cancelled', 'delivered'].includes(normalizeStatus(selected.status)) && !cancelMode && !refundMode && <Button $danger onClick={() => setCancelMode(true)}>Hủy đơn ngoại lệ</Button>}
+            {['REFUND_PENDING', 'PARTIAL_REFUND_PENDING'].includes(String(selected.paymentStatus || '').toUpperCase()) && !cancelMode && !refundMode && <Button onClick={() => setRefundMode(true)}>Xác nhận đã hoàn tiền</Button>}
             {cancelMode && <><Button $secondary onClick={() => { setCancelMode(false); setCancelReason(''); }}>Quay lại</Button>
               <Button $danger disabled={cancelReason.trim().length < 5 || submitting} onClick={() => void submitCancellation()}>{submitting ? 'Đang xử lý...' : 'Xác nhận hủy đơn'}</Button></>}
+            {refundMode && <><Button $secondary onClick={() => { setRefundMode(false); setRefundReference(''); setRefundNote(''); }}>Quay lại</Button>
+              <Button disabled={!refundReference.trim() || submitting} onClick={() => void submitRefund()}>{submitting ? 'Đang xử lý...' : 'Lưu kết quả hoàn tiền'}</Button></>}
           </Actions>
         </Dialog>
       </Overlay>}

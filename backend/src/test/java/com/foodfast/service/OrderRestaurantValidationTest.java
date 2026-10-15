@@ -55,6 +55,12 @@ class OrderRestaurantValidationTest {
     @Mock
     private CustomerNotificationService customerNotificationService;
 
+    @Mock
+    private DeliveryTaskService deliveryTaskService;
+
+    @Mock
+    private OrderGroupPaymentService orderGroupPaymentService;
+
     private OrderService service;
 
     @BeforeEach
@@ -70,7 +76,9 @@ class OrderRestaurantValidationTest {
                 new ProductOptionPricingService(productOptionGroupRepository),
                 voucherService,
                 orderStatusHistoryService,
-                customerNotificationService
+                customerNotificationService,
+                deliveryTaskService,
+                orderGroupPaymentService
         );
         lenient().when(voucherService.applyAndReserve(any(), any(), any(), any(Integer.class), any(), any()))
                 .thenReturn(VoucherService.VoucherApplication.none());

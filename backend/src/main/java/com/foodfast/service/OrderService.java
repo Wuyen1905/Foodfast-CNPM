@@ -7,6 +7,7 @@ import com.foodfast.entity.OrderItem;
 import com.foodfast.entity.OrderItemOption;
 import com.foodfast.entity.OrderStatus;
 import com.foodfast.entity.Product;
+import com.foodfast.entity.VoucherScope;
 import com.foodfast.event.OrderEventPublisher;
 import com.foodfast.repository.OrderRepository;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,8 @@ public class OrderService {
     private final VoucherService voucherService;
     private final OrderStatusHistoryService orderStatusHistoryService;
     private final CustomerNotificationService customerNotificationService;
+    private final DeliveryTaskService deliveryTaskService;
+    private final OrderGroupPaymentService orderGroupPaymentService;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -46,7 +49,9 @@ public class OrderService {
             ProductOptionPricingService optionPricingService,
             VoucherService voucherService,
             OrderStatusHistoryService orderStatusHistoryService,
-            CustomerNotificationService customerNotificationService) {
+            CustomerNotificationService customerNotificationService,
+            DeliveryTaskService deliveryTaskService,
+            OrderGroupPaymentService orderGroupPaymentService) {
         this.orderRepository = orderRepository;
         this.productAvailabilityService = productAvailabilityService;
         this.orderEventPublisher = orderEventPublisher;
@@ -56,6 +61,8 @@ public class OrderService {
         this.voucherService = voucherService;
         this.orderStatusHistoryService = orderStatusHistoryService;
         this.customerNotificationService = customerNotificationService;
+        this.deliveryTaskService = deliveryTaskService;
+        this.orderGroupPaymentService = orderGroupPaymentService;
     }
 
     @Transactional(readOnly = true)
@@ -171,11 +178,25 @@ public class OrderService {
             String idempotencyKey,
             String idempotencyRequestHash
     ) {
+        return createOrderFromRequest(req, idempotencyKey, idempotencyRequestHash, null, null, true);
+    }
+
+    @Transactional
+    public Order createOrderFromRequest(
+            CreateOrderRequest req,
+            String idempotencyKey,
+            String idempotencyRequestHash,
+            String orderGroupId,
+            Integer groupPosition,
+            boolean announceImmediately
+    ) {
         Order order = new Order();
         // Public clients never choose the persistent order id.
         order.setId(generateOrderId());
         order.setIdempotencyKey(idempotencyKey);
         order.setIdempotencyRequestHash(idempotencyRequestHash);
+        order.setOrderGroupId(orderGroupId);
+        order.setGroupPosition(groupPosition);
         
         order.setCustomerName(req.customerName);
         order.setCustomerPhone(req.customerPhone);
@@ -224,7 +245,10 @@ public class OrderService {
 
         order.setVoucherCode(pricing.voucher().code());
         order.setVoucherName(pricing.voucher().name());
+        order.setVoucherScope(pricing.voucher().scope());
         order.setDiscountAmount(pricing.voucher().discountAmount());
+        order.setRestaurantDiscountAmount(pricing.voucher().scope() == VoucherScope.RESTAURANT
+                ? pricing.voucher().discountAmount() : 0);
 
         // Always recalculate total from items
         order.recalculateTotal();
@@ -234,19 +258,20 @@ public class OrderService {
                 saved.getId(), null, OrderStatus.PENDING, saved.getUserId(),
                 "CUSTOMER", "CHECKOUT", "Khách hàng tạo đơn"
         );
-        customerNotificationService.orderCreated(saved);
-        if (PaymentStatusPolicy.isReadyForRestaurant(saved)) {
-            orderEventPublisher.publishOrderUpdate(saved);
-
-            // VNPay orders are announced only after the gateway confirms payment.
-            try {
-                notificationService.createNotification(saved);
-            } catch (Exception e) {
-                System.err.println("[OrderService] Failed to create notification: " + e.getMessage());
-            }
-        }
+        if (announceImmediately) announceCreatedOrder(saved);
         
         return saved;
+    }
+
+    public void announceCreatedOrder(Order order) {
+        customerNotificationService.orderCreated(order);
+        if (!PaymentStatusPolicy.isReadyForRestaurant(order)) return;
+        orderEventPublisher.publishOrderUpdate(order);
+        try {
+            notificationService.createNotification(order);
+        } catch (Exception e) {
+            System.err.println("[OrderService] Failed to create notification: " + e.getMessage());
+        }
     }
 
     private ResolvedPricing resolvePricing(
@@ -433,6 +458,12 @@ public class OrderService {
             }
         }
         Order saved = orderRepository.save(order);
+        if (status == OrderStatus.READY) {
+            deliveryTaskService.ensureWaitingTask(saved);
+        }
+        if (status == OrderStatus.DELIVERED) {
+            orderGroupPaymentService.refreshForOrder(saved);
+        }
         orderStatusHistoryService.record(
                 saved.getId(), previousStatus, status, actorId, actorRole, source, reason
         );

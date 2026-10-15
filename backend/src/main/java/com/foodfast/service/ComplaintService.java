@@ -1,6 +1,5 @@
 package com.foodfast.service;
 
-import com.foodfast.dto.CompleteRefundRequest;
 import com.foodfast.dto.ComplaintResponse;
 import com.foodfast.dto.CreateComplaintRequest;
 import com.foodfast.dto.ReviewComplaintRequest;
@@ -11,7 +10,6 @@ import com.foodfast.entity.ComplaintHistory;
 import com.foodfast.entity.ComplaintStatus;
 import com.foodfast.entity.Order;
 import com.foodfast.entity.OrderStatus;
-import com.foodfast.entity.RefundStatus;
 import com.foodfast.exception.ForbiddenOperationException;
 import com.foodfast.repository.ComplaintHistoryRepository;
 import com.foodfast.repository.ComplaintRepository;
@@ -45,14 +43,11 @@ public class ComplaintService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng"));
         if (!StringUtils.hasText(order.getUserId())
                 || !order.getUserId().equals(authenticatedCustomerId.trim())) {
-            throw new ForbiddenOperationException("Bạn chỉ có thể khiếu nại đơn hàng của chính mình");
+            throw new ForbiddenOperationException("Bạn chỉ có thể báo cáo sự cố cho đơn hàng của chính mình");
         }
         validateEligibleStatus(order, request.category());
         if (complaintRepository.existsByOrderId(order.getId())) {
-            throw new IllegalStateException("Mỗi đơn hàng chỉ được tạo một hồ sơ khiếu nại");
-        }
-        if (request.requestedRefundAmount() > order.getTotal()) {
-            throw new IllegalArgumentException("Số tiền yêu cầu hoàn không được lớn hơn tổng đơn hàng");
+            throw new IllegalStateException("Mỗi đơn hàng chỉ được tạo một báo cáo sự cố");
         }
 
         List<String> evidence = sanitizeEvidence(request.evidenceUrls());
@@ -68,10 +63,9 @@ public class ComplaintService {
         complaint.setCategory(request.category());
         complaint.setDescription(request.description().trim());
         complaint.setEvidenceUrls(evidence);
-        complaint.setRequestedRefundAmount(request.requestedRefundAmount());
         Complaint saved = complaintRepository.save(complaint);
         appendHistory(saved, "CREATED", "CUSTOMER", authenticatedCustomerId, null,
-                ComplaintStatus.OPEN, request.description(), request.requestedRefundAmount());
+                ComplaintStatus.OPEN, request.description());
         return response(saved);
     }
 
@@ -79,7 +73,7 @@ public class ComplaintService {
     public List<ComplaintResponse> list(String viewerRole, String viewerId, ComplaintStatus status) {
         String role = normalizeRole(viewerRole);
         if (!StringUtils.hasText(viewerId)) {
-            throw new IllegalArgumentException("Thiếu mã người xem khiếu nại");
+            throw new IllegalArgumentException("Thiếu mã người xem báo cáo sự cố");
         }
         List<Complaint> complaints = switch (role) {
             case "CUSTOMER" -> status == null
@@ -91,7 +85,7 @@ public class ComplaintService {
             case "ADMIN" -> status == null
                     ? complaintRepository.findAllByOrderByCreatedAtDesc()
                     : complaintRepository.findByStatusOrderByCreatedAtDesc(status);
-            default -> throw new ForbiddenOperationException("Vai trò không được xem danh sách khiếu nại");
+            default -> throw new ForbiddenOperationException("Vai trò không được xem danh sách báo cáo sự cố");
         };
         return complaints.stream().map(this::response).toList();
     }
@@ -108,74 +102,33 @@ public class ComplaintService {
         authorizeHandler(complaint, role, authenticatedActorId);
         if (complaint.getStatus() == ComplaintStatus.RESOLVED
                 || complaint.getStatus() == ComplaintStatus.REJECTED) {
-            throw new IllegalStateException("Khiếu nại đã có kết quả cuối cùng");
+            throw new IllegalStateException("Báo cáo sự cố đã có kết quả cuối cùng");
         }
 
         ComplaintStatus before = complaint.getStatus();
         String note = trimToNull(request.note());
-        int historyRefund = 0;
         if (request.action() == ComplaintAction.START_REVIEW) {
+            if (complaint.getStatus() != ComplaintStatus.OPEN) {
+                throw new IllegalStateException("Báo cáo sự cố đã được tiếp nhận trước đó");
+            }
             complaint.setStatus(ComplaintStatus.REVIEWING);
         } else if (request.action() == ComplaintAction.REJECT) {
             requireResolution(note);
             complaint.setStatus(ComplaintStatus.REJECTED);
-            complaint.setRefundStatus(RefundStatus.REJECTED);
             complaint.setResolution(note);
             complaint.setResolvedAt(System.currentTimeMillis());
-        } else if (request.action() == ComplaintAction.APPROVE_REFUND) {
+        } else if (request.action() == ComplaintAction.RESOLVE) {
             requireResolution(note);
-            int amount = request.approvedRefundAmount() == null ? 0 : request.approvedRefundAmount();
-            Order order = orderRepository.findById(complaint.getOrderId())
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng"));
-            if (amount < 0 || amount > order.getTotal()) {
-                throw new IllegalArgumentException("Số tiền hoàn được duyệt không hợp lệ");
-            }
-            complaint.setApprovedRefundAmount(amount);
-            complaint.setRefundStatus(amount > 0 ? RefundStatus.PENDING : RefundStatus.NONE);
             complaint.setStatus(ComplaintStatus.RESOLVED);
             complaint.setResolution(note);
             complaint.setResolvedAt(System.currentTimeMillis());
-            historyRefund = amount;
-            if (amount > 0) {
-                order.setPartialRefundAmount(amount);
-                order.setPaymentStatus(amount == order.getTotal()
-                        ? PaymentStatusPolicy.REFUND_PENDING
-                        : PaymentStatusPolicy.PARTIAL_REFUND_PENDING);
-                orderRepository.save(order);
-            }
         }
 
         complaint.setHandlerRole(role);
         complaint.setHandlerId(authenticatedActorId.trim());
         Complaint saved = complaintRepository.save(complaint);
         appendHistory(saved, request.action().name(), role, authenticatedActorId, before,
-                saved.getStatus(), note, historyRefund);
-        return response(saved);
-    }
-
-    @Transactional
-    public ComplaintResponse completeRefund(
-            String complaintId,
-            String authenticatedAdminId,
-            CompleteRefundRequest request
-    ) {
-        Complaint complaint = find(complaintId);
-        if (complaint.getRefundStatus() != RefundStatus.PENDING) {
-            throw new IllegalStateException("Khiếu nại không có khoản hoàn tiền đang chờ xử lý");
-        }
-        Order order = orderRepository.findById(complaint.getOrderId())
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng"));
-        complaint.setRefundStatus(RefundStatus.COMPLETED);
-        complaint.setRefundTransactionReference(request.transactionReference().trim());
-        complaint.setHandlerRole("ADMIN");
-        complaint.setHandlerId(authenticatedAdminId.trim());
-        order.setPaymentStatus(complaint.getApprovedRefundAmount() == order.getTotal()
-                ? PaymentStatusPolicy.REFUNDED
-                : PaymentStatusPolicy.PARTIAL_REFUNDED);
-        orderRepository.save(order);
-        Complaint saved = complaintRepository.save(complaint);
-        appendHistory(saved, "REFUND_COMPLETED", "ADMIN", authenticatedAdminId, saved.getStatus(),
-                saved.getStatus(), trimToNull(request.note()), saved.getApprovedRefundAmount());
+                saved.getStatus(), note);
         return response(saved);
     }
 
@@ -209,7 +162,7 @@ public class ComplaintService {
         if ("ADMIN".equals(role)) return;
         if (!"RESTAURANT".equals(role)
                 || !complaint.getRestaurantId().equalsIgnoreCase(actorId.trim())) {
-            throw new ForbiddenOperationException("Bạn không được xử lý khiếu nại này");
+            throw new ForbiddenOperationException("Bạn không được xử lý báo cáo sự cố này");
         }
     }
 
@@ -229,11 +182,11 @@ public class ComplaintService {
 
     private Complaint find(String id) {
         return complaintRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khiếu nại"));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy báo cáo sự cố"));
     }
 
     private void appendHistory(Complaint complaint, String action, String actorRole, String actorId,
-                               ComplaintStatus from, ComplaintStatus to, String note, int refundAmount) {
+                               ComplaintStatus from, ComplaintStatus to, String note) {
         ComplaintHistory history = new ComplaintHistory();
         history.setComplaintId(complaint.getId());
         history.setAction(action);
@@ -242,7 +195,6 @@ public class ComplaintService {
         history.setFromStatus(from == null ? null : from.name());
         history.setToStatus(to.name());
         history.setNote(note);
-        history.setRefundAmount(refundAmount);
         historyRepository.save(history);
     }
 

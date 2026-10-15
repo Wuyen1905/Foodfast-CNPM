@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useOrders, Order } from "@/context/OrderContext";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context";
 import { formatVND } from "../utils/currency";
-import { createVNPayUrl, getVNPayAvailability } from "../services/vnpay";
+import { createVNPayGroupUrl, getVNPayAvailability } from "../services/vnpay";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { checkoutSchema, CheckoutFormData } from "../schemas/checkoutSchema";
-import { notifyRestaurant, determineRestaurantFromCartItems } from "../services/restaurantNotificationService";
-import { getRestaurant } from "@/api/restaurantApi";
-import { OrderQuote, quoteOrder } from "@/api/orderApi";
+import { createOrderGroup, OrderGroupQuote, quoteOrderGroup } from "@/api/orderApi";
 import { DeliveryAddress, getAddresses } from "@/api/addressApi";
 import { AvailableVoucher, getAvailableVouchers } from "@/api/voucherApi";
 
@@ -270,7 +267,6 @@ const VNPayQRCode = styled.div`
 
 const Checkout: React.FC = () => {
   const { user } = useAuth();
-  const { addOrder } = useOrders();
   const { items, clear } = useCart();
   const navigate = useNavigate();
   
@@ -285,43 +281,39 @@ const Checkout: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVNPayModal, setShowVNPayModal] = useState(false);
   const [vnpayDisabledMsg, setVnpayDisabledMsg] = useState<string | null>(null);
-  const [voucherCode, setVoucherCode] = useState('');
-  const [appliedVoucherCode, setAppliedVoucherCode] = useState('');
-  const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
-  const [availableVouchers, setAvailableVouchers] = useState<AvailableVoucher[]>([]);
+  const [voucherInputs, setVoucherInputs] = useState<Record<string, string>>({});
+  const [appliedVoucherCodes, setAppliedVoucherCodes] = useState<Record<string, string>>({});
+  const [applyingVoucherFor, setApplyingVoucherFor] = useState<string | null>(null);
+  const [availableVouchers, setAvailableVouchers] = useState<Record<string, AvailableVoucher[]>>({});
   const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
-  const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [quote, setQuote] = useState<OrderGroupQuote | null>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState('');
-  const orderAttemptKey = useRef(`order-${crypto.randomUUID()}`);
+  const orderAttemptKey = useRef(`group-${crypto.randomUUID()}`);
 
   // All displayed amounts come from the same backend calculation used to save the order.
   const subtotal = quote?.subtotal ?? 0;
   const delivery = quote?.shippingFee ?? 0;
   const discount = quote?.discountAmount ?? 0;
   const total = quote?.total ?? 0;
+  const multiRestaurant = (quote?.orders.length || 0) > 1;
 
-  const requestQuote = useCallback(async (requestedVoucher = appliedVoucherCode) => {
+  const requestQuote = useCallback(async (
+    requestedVouchers: Record<string, string> = appliedVoucherCodes,
+  ) => {
     if (items.length === 0) {
       setQuote(null);
-      return null;
-    }
-    const restaurantId = determineRestaurantFromCartItems(items);
-    if (!restaurantId) {
-      setQuote(null);
-      setQuoteError('Mỗi đơn chỉ được chứa món của một nhà hàng');
       return null;
     }
 
     setIsLoadingQuote(true);
     setQuoteError(null);
     try {
-      const result = await quoteOrder({
+      const result = await quoteOrderGroup({
         customerPhone: form.phone || user?.phone || '0000000000',
         address: form.address || 'Chưa nhập địa chỉ',
-        restaurantId,
         items: items.map((item) => ({
           productId: item.productId,
           quantity: item.qty,
@@ -329,7 +321,7 @@ const Checkout: React.FC = () => {
           itemNote: item.itemNote,
         })),
         paymentMethod: form.payment,
-        voucherCode: requestedVoucher || undefined,
+        voucherCodesByRestaurant: requestedVouchers,
       });
       setQuote(result);
       return result;
@@ -341,60 +333,63 @@ const Checkout: React.FC = () => {
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [appliedVoucherCode, form.address, form.payment, form.phone, items, user?.email, user?.id, user?.name, user?.phone]);
+  }, [appliedVoucherCodes, form.address, form.payment, form.phone, items, user?.phone]);
 
   useEffect(() => {
     void requestQuote();
   }, [requestQuote]);
 
-  const applyVoucher = async (selectedCode = voucherCode) => {
-    const restaurantId = determineRestaurantFromCartItems(items);
+  const applyVoucher = async (restaurantId: string, selectedCode = voucherInputs[restaurantId] || '') => {
     if (!user?.id) {
       toast.error('Vui lòng đăng nhập để dùng mã ưu đãi');
-      return;
-    }
-    if (!restaurantId) {
-      toast.error('Không xác định được nhà hàng của giỏ hàng');
       return;
     }
     if (!selectedCode.trim()) {
       toast.error('Vui lòng nhập mã ưu đãi');
       return;
     }
-    setIsApplyingVoucher(true);
+    setApplyingVoucherFor(restaurantId);
     try {
-      const result = await requestQuote(selectedCode.trim());
-      if (!result?.voucherCode) {
+      const nextCodes = { ...appliedVoucherCodes, [restaurantId]: selectedCode.trim().toUpperCase() };
+      const result = await requestQuote(nextCodes);
+      const child = result?.orders.find(order => order.restaurantId === restaurantId);
+      if (!child?.voucherCode) {
         throw new Error('Mã ưu đãi không được áp dụng');
       }
-      setVoucherCode(result.voucherCode);
-      setAppliedVoucherCode(result.voucherCode);
-      toast.success(`Đã áp dụng ${result.voucherCode}: giảm ${formatVND(result.discountAmount)}`);
+      setVoucherInputs(current => ({ ...current, [restaurantId]: child.voucherCode || '' }));
+      setAppliedVoucherCodes(nextCodes);
+      toast.success(`Đã áp dụng ${child.voucherCode}: giảm ${formatVND(child.discountAmount)}`);
     } catch (error: any) {
-      setAppliedVoucherCode('');
+      setAppliedVoucherCodes(current => {
+        const next = { ...current };
+        delete next[restaurantId];
+        return next;
+      });
       toast.error(error?.response?.data?.message || error?.message || 'Không thể áp dụng mã ưu đãi');
     } finally {
-      setIsApplyingVoucher(false);
+      setApplyingVoucherFor(null);
     }
   };
 
   useEffect(() => {
-    const restaurantId = determineRestaurantFromCartItems(items);
-    if (!user?.id || !restaurantId || items.length === 0) {
-      setAvailableVouchers([]);
+    if (!user?.id || !quote || quote.orders.length === 0) {
+      setAvailableVouchers({});
       return;
     }
     let active = true;
     setIsLoadingVouchers(true);
-    getAvailableVouchers(restaurantId, subtotal)
-      .then(vouchers => { if (active) setAvailableVouchers(vouchers); })
+    Promise.all(quote.orders.map(async order => [
+      order.restaurantId,
+      await getAvailableVouchers(order.restaurantId, order.subtotal),
+    ] as const))
+      .then(entries => { if (active) setAvailableVouchers(Object.fromEntries(entries)); })
       .catch(error => {
         console.error('Không thể tải mã ưu đãi', error);
-        if (active) setAvailableVouchers([]);
+        if (active) setAvailableVouchers({});
       })
       .finally(() => { if (active) setIsLoadingVouchers(false); });
     return () => { active = false; };
-  }, [items, subtotal, user?.id]);
+  }, [quote?.orders, user?.id]);
 
   useEffect(() => {
     if (user?.phone) {
@@ -478,37 +473,25 @@ const Checkout: React.FC = () => {
       return;
     }
 
-    const restaurantId = determineRestaurantFromCartItems(items);
-    if (!restaurantId) {
-      toast.error("Mỗi đơn chỉ được chứa món của một nhà hàng. Vui lòng kiểm tra lại giỏ hàng.");
-      navigate('/cart');
-      return;
-    }
-
-    try {
-      const restaurant = await getRestaurant(restaurantId);
-      if (!restaurant.isActive) {
-        toast.error('Nhà hàng hiện không hoạt động');
-        return;
-      }
-      if (!restaurant.acceptingOrders) {
-        toast.error(
-          `Nhà hàng đang tạm ngừng nhận đơn${restaurant.pauseReason ? `: ${restaurant.pauseReason}` : ''}`
-        );
-        return;
-      }
-      if (!restaurant.openNow) {
-        toast.error(`Nhà hàng đang đóng cửa. Giờ phục vụ: ${restaurant.openingTime}–${restaurant.closingTime}`);
-        return;
-      }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Không thể kiểm tra trạng thái nhà hàng');
-      return;
-    }
-    
     setIsSubmitting(true);
 
     try {
+      const groupRequest = {
+        customerPhone: form.phone,
+        address: form.address.trim(),
+        note: form.note || undefined,
+        paymentMethod: form.payment,
+        items: items.map(item => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.qty,
+          price: item.price,
+          selectedOptionIds: item.selectedOptionIds,
+          itemNote: item.itemNote,
+        })),
+        voucherCodesByRestaurant: appliedVoucherCodes,
+      };
+
       if (form.payment === 'vnpay') {
         setShowVNPayModal(true);
         
@@ -520,35 +503,8 @@ const Checkout: React.FC = () => {
             throw error;
           }
 
-          const newOrder: Order = {
-            id: Date.now().toString(),
-            name: user?.name || 'Khách hàng',
-            phone: form.phone,
-            customerEmail: user?.email || '',
-            address: form.address.trim(),
-            items: items.map(item => ({
-              productId: item.productId,
-              name: item.name,
-              qty: item.qty,
-              price: item.price,
-              selectedOptionIds: item.selectedOptionIds,
-              itemNote: item.itemNote,
-            })),
-            total: confirmedQuote.total,
-            status: "Pending" as const,
-            paymentMethod: 'vnpay' as const,
-            paymentStatus: 'pending' as const,
-            restaurantId: restaurantId || undefined,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            internalNotes: form.note || undefined,
-            voucherCode: confirmedQuote.voucherCode,
-          };
-
-          // Persist first. The gateway callback always reconciles against this
-          // server-side order and its server-calculated total.
-          const created = await addOrder(newOrder, orderAttemptKey.current);
-          const url = await createVNPayUrl(created.id, `${orderAttemptKey.current}:vnpay`);
+          const created = await createOrderGroup(groupRequest, orderAttemptKey.current);
+          const url = await createVNPayGroupUrl(created.id, `${orderAttemptKey.current}:vnpay`);
           window.location.href = url;
         } catch (error: any) {
           console.error('[VNPay] Payment error:', error);
@@ -562,48 +518,11 @@ const Checkout: React.FC = () => {
           }
         }
       } else {
-        // Handle other payment methods (COD, etc.)
-        const orderId = Date.now().toString();
-        const newOrder: Order = {
-          id: orderId,
-          name: user?.name || 'Khách hàng',
-          phone: form.phone,
-          customerEmail: user?.email || '',
-          address: form.address.trim(),
-          items: items.map(item => ({
-              productId: item.productId,
-              name: item.name,
-              qty: item.qty,
-              price: item.price,
-              selectedOptionIds: item.selectedOptionIds,
-              itemNote: item.itemNote,
-          })),
-          total: confirmedQuote.total,
-          status: "Pending" as const,
-          paymentMethod: form.payment as any,
-          paymentStatus: 'pending',
-          restaurantId: restaurantId || undefined,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          internalNotes: form.note || undefined,
-          voucherCode: confirmedQuote.voucherCode,
-        };
-        
-        const created = await addOrder(newOrder, orderAttemptKey.current);
-
-        // Notify restaurant about the new order
-        if (restaurantId) {
-          notifyRestaurant(created).catch(err => {
-            console.error('Failed to notify restaurant:', err);
-            // Don't show error to user, order was still created successfully
-          });
-        }
-
-        const cartItemsSnapshot = items;
+        const created = await createOrderGroup(groupRequest, orderAttemptKey.current);
         await clear();
-        orderAttemptKey.current = `order-${crypto.randomUUID()}`;
-        toast.success("Bạn đã đặt hàng thành công!");
-        navigate(`/order-confirmation/${created.id}`, { state: { order: created, cartItems: cartItemsSnapshot } });
+        orderAttemptKey.current = `group-${crypto.randomUUID()}`;
+        toast.success(`Đã tạo ${created.orderCount} đơn cho ${created.orderCount} nhà hàng!`);
+        navigate(`/order-groups/${created.id}`, { state: { group: created } });
       }
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Có lỗi xảy ra khi đặt hàng!");
@@ -749,13 +668,21 @@ const Checkout: React.FC = () => {
 
               <PaymentMethodCard
                 isSelected={form.payment === 'vnpay'}
-                onClick={() => setForm(prev => ({ ...prev, payment: 'vnpay' }))}
+                onClick={() => {
+                  if (multiRestaurant) {
+                    toast('Giỏ nhiều nhà hàng hiện thanh toán khi nhận hàng để mỗi đơn được đối soát riêng.');
+                    return;
+                  }
+                  setForm(prev => ({ ...prev, payment: 'vnpay' }));
+                }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 <PaymentMethodIcon>🏦</PaymentMethodIcon>
                 <PaymentMethodName>VNPay</PaymentMethodName>
-                <PaymentMethodDesc>Thanh toán trực tuyến qua VNPay</PaymentMethodDesc>
+                <PaymentMethodDesc>
+                  {multiRestaurant ? 'Chỉ dùng khi giỏ có một nhà hàng' : 'Thanh toán trực tuyến qua VNPay'}
+                </PaymentMethodDesc>
               </PaymentMethodCard>
             </PaymentMethodGrid>
 
@@ -796,125 +723,83 @@ const Checkout: React.FC = () => {
           {/* Order Summary */}
           <FormSection>
             <SectionTitle>Tóm tắt đơn hàng</SectionTitle>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 700 }}>Mã ưu đãi</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  value={voucherCode}
-                  onChange={(event) => {
-                    setVoucherCode(event.target.value.toUpperCase());
-                    if (appliedVoucherCode) setAppliedVoucherCode('');
-                  }}
-                  placeholder="Ví dụ: WELCOME20"
-                  maxLength={40}
-                  style={{
-                    flex: 1, padding: '12px 14px', border: '1px solid var(--border)',
-                    borderRadius: 8, background: 'var(--card)', color: 'var(--text)',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => void applyVoucher()}
-                  disabled={isApplyingVoucher || !voucherCode.trim()}
-                  style={{
-                    padding: '10px 18px', border: 'none', borderRadius: 8,
-                    background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontWeight: 700,
-                  }}
-                >
-                  {isApplyingVoucher ? 'Đang kiểm tra...' : 'Áp dụng'}
-                </button>
-              </div>
-              {quote?.voucherCode && (
-                <small style={{ display: 'block', marginTop: 8, color: '#15803d' }}>
-                  ✓ {quote.voucherName || quote.voucherCode} — giảm {formatVND(quote.discountAmount)}
-                </small>
-              )}
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>Ưu đãi dành cho đơn này</div>
-                {isLoadingVouchers && (
-                  <small style={{ color: 'var(--secondaryText)' }}>Đang tải ưu đãi...</small>
-                )}
-                {!isLoadingVouchers && availableVouchers.length === 0 && (
-                  <small style={{ color: 'var(--secondaryText)' }}>
-                    Hiện chưa có mã ưu đãi phù hợp với nhà hàng này.
-                  </small>
-                )}
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {availableVouchers.map(voucher => {
-                    const applied = appliedVoucherCode === voucher.code;
-                    const benefit = voucher.discountType === 'PERCENT'
-                      ? `Giảm ${voucher.discountValue}%${voucher.maxDiscount > 0 ? `, tối đa ${formatVND(voucher.maxDiscount)}` : ''}`
-                      : `Giảm ${formatVND(voucher.discountValue)}`;
-                    return (
-                      <div key={voucher.code} style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
-                        padding: 12, border: `1px solid ${voucher.eligible ? '#86efac' : 'var(--border)'}`,
-                        borderRadius: 10, background: voucher.eligible ? '#f0fdf4' : 'var(--background)',
-                      }}>
-                        <div>
-                          <div><strong>{voucher.code}</strong> · {voucher.name}</div>
-                          <div style={{ fontSize: 13, marginTop: 3 }}>{benefit} · Đơn từ {formatVND(voucher.minOrderAmount)}</div>
-                          <div style={{ fontSize: 12, marginTop: 3, color: voucher.eligible ? '#15803d' : '#b45309' }}>
-                            {voucher.eligible
-                              ? `Đơn này dự kiến giảm ${formatVND(voucher.estimatedDiscount)}`
-                              : `Mua thêm ${formatVND(voucher.amountNeeded)} để áp dụng`}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={!voucher.eligible || isApplyingVoucher || applied}
-                          onClick={() => {
-                            setVoucherCode(voucher.code);
-                            void applyVoucher(voucher.code);
-                          }}
-                          style={{
-                            padding: '8px 12px', border: 0, borderRadius: 8,
-                            background: applied ? '#15803d' : voucher.eligible ? 'var(--primary)' : '#d1d5db',
-                            color: '#fff', fontWeight: 700, cursor: voucher.eligible ? 'pointer' : 'not-allowed',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {applied ? 'Đã áp dụng' : 'Áp dụng'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {isLoadingQuote && (
-                <small style={{ display: 'block', marginTop: 8, color: 'var(--secondaryText)' }}>
-                  Đang tính giá từ hệ thống...
-                </small>
-              )}
-              {quoteError && (
-                <small style={{ display: 'block', marginTop: 8, color: '#dc2626' }}>
-                  {quoteError}
-                </small>
-              )}
-            </div>
-            
+            {quote?.orders.map(orderQuote => {
+              const vouchers = availableVouchers[orderQuote.restaurantId] || [];
+              const inputCode = voucherInputs[orderQuote.restaurantId] || '';
+              return (
+                <OrderSummary key={orderQuote.restaurantId}>
+                  <div style={{ fontWeight: 800, marginBottom: 10 }}>{orderQuote.restaurantName}</div>
+                  {orderQuote.items.map(item => (
+                    <SummaryRow key={`${orderQuote.restaurantId}-${item.productId}-${item.name}`}>
+                      <span>{item.name} x {item.quantity}</span>
+                      <span>{formatVND(item.lineTotal)}</span>
+                    </SummaryRow>
+                  ))}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                    <input
+                      value={inputCode}
+                      onChange={event => setVoucherInputs(current => ({
+                        ...current,
+                        [orderQuote.restaurantId]: event.target.value.toUpperCase(),
+                      }))}
+                      placeholder="Mã toàn hệ thống hoặc của nhà hàng"
+                      maxLength={40}
+                      style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void applyVoucher(orderQuote.restaurantId)}
+                      disabled={applyingVoucherFor === orderQuote.restaurantId || !inputCode.trim()}
+                      style={{ padding: '9px 14px', border: 0, borderRadius: 8, background: 'var(--primary)', color: '#fff', fontWeight: 700 }}
+                    >
+                      {applyingVoucherFor === orderQuote.restaurantId ? 'Đang kiểm tra...' : 'Áp dụng'}
+                    </button>
+                  </div>
+                  {orderQuote.voucherCode && (
+                    <small style={{ display: 'block', marginTop: 7, color: '#15803d' }}>
+                      ✓ {orderQuote.voucherName || orderQuote.voucherCode} — giảm {formatVND(orderQuote.discountAmount)}
+                    </small>
+                  )}
+                  <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {isLoadingVouchers && <small>Đang tải ưu đãi...</small>}
+                    {!isLoadingVouchers && vouchers.length === 0 && <small>Chưa có mã phù hợp cho đơn này.</small>}
+                    {vouchers.filter(voucher => voucher.eligible).map(voucher => (
+                      <button
+                        key={voucher.code}
+                        type="button"
+                        onClick={() => {
+                          setVoucherInputs(current => ({ ...current, [orderQuote.restaurantId]: voucher.code }));
+                          void applyVoucher(orderQuote.restaurantId, voucher.code);
+                        }}
+                        style={{ padding: '7px 10px', border: '1px solid #86efac', borderRadius: 8, background: '#f0fdf4', color: '#15803d', cursor: 'pointer' }}
+                      >
+                        {voucher.code} · {voucher.scope === 'GLOBAL' ? 'Toàn hệ thống' : 'Riêng nhà hàng'} · giảm {formatVND(voucher.estimatedDiscount)}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                    <SummaryRow><span>Tạm tính</span><span>{formatVND(orderQuote.subtotal)}</span></SummaryRow>
+                    <SummaryRow><span>Phí giao hàng</span><span>{formatVND(orderQuote.shippingFee)}</span></SummaryRow>
+                    {orderQuote.discountAmount > 0 && <SummaryRow><span>Ưu đãi</span><span>−{formatVND(orderQuote.discountAmount)}</span></SummaryRow>}
+                    <SummaryRow><span>Tổng đơn</span><span>{formatVND(orderQuote.total)}</span></SummaryRow>
+                  </div>
+                </OrderSummary>
+              );
+            })}
+            {isLoadingQuote && <small style={{ color: 'var(--secondaryText)' }}>Đang tính giá từ hệ thống...</small>}
+            {quoteError && <small style={{ color: '#dc2626' }}>{quoteError}</small>}
             <OrderSummary>
-              {items.map((item, index) => (
-                <SummaryRow key={item.id}>
-                  <span>
-                    {item.name} x {item.qty}
-                    {item.optionSummary && <small style={{ display: 'block', opacity: 0.75 }}>{item.optionSummary}</small>}
-                    {item.itemNote && <small style={{ display: 'block', opacity: 0.75 }}>Ghi chú: {item.itemNote}</small>}
-                  </span>
-                  <span>{formatVND(quote?.items[index]?.lineTotal ?? 0)}</span>
-                </SummaryRow>
-              ))}
               <SummaryRow>
-                <span>Tạm tính</span>
+                <span>Tạm tính toàn bộ</span>
                 <span>{formatVND(subtotal)}</span>
               </SummaryRow>
               <SummaryRow>
-                <span>Phí giao hàng</span>
+                <span>Phí giao hàng ({quote?.orders.length || 0} đơn)</span>
                 <span>{formatVND(delivery)}</span>
               </SummaryRow>
               {discount > 0 && (
                 <SummaryRow>
-                  <span>Ưu đãi ({quote?.voucherCode})</span>
+                  <span>Tổng ưu đãi</span>
                   <span style={{ color: '#15803d' }}>−{formatVND(discount)}</span>
                 </SummaryRow>
               )}

@@ -66,6 +66,8 @@ export interface CancelOrderRequest {
 
 export interface Order {
   id: string;
+  orderGroupId?: string;
+  groupPosition?: number;
   name: string; // Maps to customerName in backend
   phone: string; // Maps to customerPhone in backend
   customerName?: string;
@@ -122,6 +124,54 @@ export interface Order {
   voucherCode?: string;
   voucherName?: string;
   partialRefundAmount?: number;
+  paymentAllocatedAmount?: number;
+  refundTransactionReference?: string;
+  refundCompletedAt?: number;
+  refundNote?: string;
+}
+
+export interface CreateOrderGroupRequest {
+  customerPhone: string;
+  address: string;
+  note?: string;
+  paymentMethod?: string;
+  items: CreateOrderRequest['items'];
+  voucherCodesByRestaurant?: Record<string, string>;
+}
+
+export interface OrderGroupQuote {
+  orders: OrderQuote[];
+  subtotal: number;
+  shippingFee: number;
+  taxAmount: number;
+  discountAmount: number;
+  total: number;
+}
+
+export interface OrderGroup {
+  id: string;
+  userId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  address: string;
+  note?: string;
+  paymentMethod: string;
+  paymentStatus: PaymentStatus;
+  subtotal: number;
+  shippingFee: number;
+  taxAmount: number;
+  discountAmount: number;
+  total: number;
+  payableAmount: number;
+  partialRefundAmount: number;
+  refundedAmount: number;
+  vnpayTransactionId?: string;
+  paidAt?: number;
+  orderCount: number;
+  createdAt: number;
+  updatedAt: number;
+  orders: Order[];
 }
 
 export interface OrderStatusHistory {
@@ -145,6 +195,31 @@ export const createOrder = async (body: CreateOrderRequest, idempotencyKey: stri
   const response = await apiClient.post('/orders', body, {
     headers: { 'Idempotency-Key': idempotencyKey },
   });
+  return response.data;
+};
+
+export const quoteOrderGroup = async (body: CreateOrderGroupRequest): Promise<OrderGroupQuote> => {
+  const response = await apiClient.post('/order-groups/quote', body);
+  return response.data;
+};
+
+export const createOrderGroup = async (
+  body: CreateOrderGroupRequest,
+  idempotencyKey: string,
+): Promise<OrderGroup> => {
+  const response = await apiClient.post('/order-groups', body, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
+  return response.data;
+};
+
+export const getOrderGroups = async (): Promise<OrderGroup[]> => {
+  const response = await apiClient.get('/order-groups');
+  return response.data;
+};
+
+export const getOrderGroup = async (id: string): Promise<OrderGroup> => {
+  const response = await apiClient.get(`/order-groups/${encodeURIComponent(id)}`);
   return response.data;
 };
 
@@ -175,6 +250,18 @@ export const getOrderStatusHistory = async (id: string): Promise<OrderStatusHist
 
 export const cancelOrder = async (id: string, body: CancelOrderRequest): Promise<Order> => {
   const response = await apiClient.post(`/orders/${id}/cancel`, body);
+  return response.data;
+};
+
+export const completeOrderRefund = async (
+  id: string,
+  transactionReference: string,
+  note?: string,
+): Promise<Order> => {
+  const response = await apiClient.patch(
+    `/admin/payments/orders/${encodeURIComponent(id)}/refund/complete`,
+    { transactionReference, note },
+  );
   return response.data;
 };
 

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'restaurant' | 'customer';
+export type UserRole = 'admin' | 'manager' | 'restaurant' | 'customer';
 
 export interface User {
   id: string;
@@ -10,6 +10,8 @@ export interface User {
   restaurantId?: string; // For restaurant users
   orderCount?: number;
   createdAt?: number;
+  accountStatus?: 'active' | 'suspended';
+  managerPermissions?: string;
 }
 
 export interface Restaurant {
@@ -89,5 +91,6 @@ export interface AuthContextValue {
   isAdmin: () => boolean;
   isRestaurant: () => boolean;
   isCustomer: () => boolean;
+  isManager: () => boolean;
   setPhone?: (phone: string) => void;
 }

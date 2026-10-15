@@ -134,6 +134,8 @@ public class AuthController {
         result.put("id", user.getId());
         result.put("username", user.getUsername());
         result.put("role", user.getRole());
+        result.put("accountStatus", user.getAccountStatus());
+        result.put("managerPermissions", user.getManagerPermissions());
         result.put("restaurantId", user.getRestaurantId());
         result.put("name", user.getName());
         result.put("email", user.getEmail());

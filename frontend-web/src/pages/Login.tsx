@@ -119,14 +119,6 @@ const ErrorMessage = styled(motion.div)`
   font-size: 14px;
 `;
 
-const DemoAccounts = styled.div`
-  margin-top: 20px;
-  padding: 16px;
-  border: 1px solid #ffe0c2;
-  border-radius: 12px;
-  background: #fff8f1;
-`;
-
 const CurrentSessionNotice = styled.div`
   margin: -16px 0 20px;
   padding: 12px 14px;
@@ -136,46 +128,6 @@ const CurrentSessionNotice = styled.div`
   color: #245b89;
   font-size: 13px;
   line-height: 1.45;
-`;
-
-const DemoTitle = styled.div`
-  color: #6b3b13;
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 10px;
-`;
-
-const DemoButtons = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-
-  @media (max-width: 420px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const DemoButton = styled.button`
-  border: 1px solid #ffb066;
-  border-radius: 10px;
-  background: white;
-  color: #9a4700;
-  padding: 10px 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled) {
-    border-color: #ff6600;
-    background: #fff1e5;
-    transform: translateY(-1px);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 `;
 
 const BackToHome = styled(motion.div)`
@@ -195,7 +147,7 @@ const BackToHome = styled(motion.div)`
 `;
 
 const Login = () => {
-  const { login, user } = useAuth();
+  const { login, logout, user } = useAuth();
   const navigate = useNavigate();
   const location: any = useLocation();
   const from = location.state?.from?.pathname || "/";
@@ -240,6 +192,18 @@ const Login = () => {
       const res = await login(loginUsername.trim(), loginPassword);
 
       if (res.ok && res.user) {
+        if (res.user.role === 'manager') {
+          logout();
+          const notice = 'Đây là tài khoản nhân viên. Vui lòng đăng nhập tại Cổng nhân viên FoodFast.';
+          toast(notice, { icon: 'ℹ️' });
+          navigate('/manager/login', {
+            replace: true,
+            state: { notice, registeredIdentity: loginUsername.trim() },
+          });
+          setBusy(false);
+          return;
+        }
+
         toast.success("🎉 Đăng nhập thành công!");
 
         // Use the user from the login response
@@ -267,16 +231,6 @@ const Login = () => {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await submitLogin(username, password);
-  };
-
-  const loginDemoAccount = async (account: 'sweetdreams' | 'aloha') => {
-    const credentials = account === 'sweetdreams'
-      ? { username: 'sweetdreams', password: 'sweet123' }
-      : { username: 'aloha_restaurant', password: 'aloha123' };
-
-    setUsername(credentials.username);
-    setPassword(credentials.password);
-    await submitLogin(credentials.username, credentials.password);
   };
 
   return (
@@ -347,24 +301,15 @@ const Login = () => {
           )}
         </form>
 
-        <DemoAccounts>
-          <DemoTitle>🏪 Tài khoản nhà hàng dùng thử</DemoTitle>
-          <DemoButtons>
-            <DemoButton type="button" disabled={busy} onClick={() => void loginDemoAccount('sweetdreams')}>
-              Đăng nhập SweetDreams
-            </DemoButton>
-            <DemoButton type="button" disabled={busy} onClick={() => void loginDemoAccount('aloha')}>
-              Đăng nhập Aloha
-            </DemoButton>
-          </DemoButtons>
-        </DemoAccounts>
-
         <div style={{ textAlign: 'center', marginTop: '24px', color: '#666', fontSize: '14px' }}>
           Chưa có tài khoản? <a href="/register" style={{ color: '#FF6600', textDecoration: 'none', fontWeight: '500' }}>Đăng ký tại đây</a>
         </div>
 
         <BackToHome>
+          <div><a href="/manager/login">Nhân viên FoodFast? Mở Cổng nhân viên</a></div>
+          <div style={{ marginTop: '10px' }}>
           <a href="/">← Quay về trang chủ</a>
+          </div>
         </BackToHome>
       </LoginCard>
     </LoginContainer>

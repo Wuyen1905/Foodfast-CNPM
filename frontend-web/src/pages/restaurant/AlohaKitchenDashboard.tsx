@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import RestaurantDashboardLayout from '@/components/restaurant/RestaurantDashboardLayout';
 import OrderTracking from '@/components/restaurant/OrderTracking';
-import CourierManagement from '@/components/restaurant/CourierManagement';
 import SupportTicketInbox from '@/components/SupportTicketInbox';
 import ComplaintInbox from '@/components/ComplaintInbox';
 import { useAuth } from '@/context';
@@ -38,12 +37,6 @@ const AlohaKitchenDashboard: React.FC = () => {
         <>
           {activeTab === 'orders' && (
             <OrderTracking
-              restaurantId={RESTAURANT_ID}
-              theme={ALOHA_THEME}
-            />
-          )}
-          {activeTab === 'couriers' && (
-            <CourierManagement
               restaurantId={RESTAURANT_ID}
               theme={ALOHA_THEME}
             />

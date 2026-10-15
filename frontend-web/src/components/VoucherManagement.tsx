@@ -110,6 +110,7 @@ const VoucherManagement: React.FC<VoucherManagementProps> = ({ admin = false, pr
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
       restaurantId: admin ? (form.restaurantId || null) : undefined,
+      scope: admin && !form.restaurantId ? 'GLOBAL' : 'RESTAURANT',
       discountType: form.discountType,
       discountValue: Number(form.discountValue),
       minOrderAmount: Number(form.minOrderAmount),

@@ -1,6 +1,7 @@
 package com.foodfast.repository;
 
 import com.foodfast.entity.Order;
+import com.foodfast.entity.OrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -46,5 +47,25 @@ public interface OrderRepository extends JpaRepository<Order, String>, JpaSpecif
 
     // Filter by the logged-in customer's user id
     List<Order> findByUserId(String userId);
+
+    List<Order> findByOrderGroupIdOrderByGroupPositionAsc(String orderGroupId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from Order o where o.restaurantId = :restaurantId and o.status = :status " +
+            "and o.deliveredAt >= :fromMillis and o.deliveredAt < :toMillis order by o.deliveredAt")
+    List<Order> findSettlementCandidatesForUpdate(
+            @Param("restaurantId") String restaurantId,
+            @Param("status") OrderStatus status,
+            @Param("fromMillis") long fromMillis,
+            @Param("toMillis") long toMillis
+    );
+
+    @Query("select o from Order o where o.status = :status and o.deliveredAt >= :fromMillis " +
+            "and o.deliveredAt < :toMillis order by o.restaurantId, o.deliveredAt")
+    List<Order> findSettlementCandidates(
+            @Param("status") OrderStatus status,
+            @Param("fromMillis") long fromMillis,
+            @Param("toMillis") long toMillis
+    );
 }
 

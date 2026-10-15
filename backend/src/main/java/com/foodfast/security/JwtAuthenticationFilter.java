@@ -40,7 +40,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 JwtService.Claims claims = jwtService.verify(authorization.substring(7).trim());
                 User user = userRepository.findById(claims.userId()).orElse(null);
-                if (user != null && !"suspended".equalsIgnoreCase(user.getRole())) {
+                if (user != null && user.isAccountActive()
+                        && !"suspended".equalsIgnoreCase(user.getRole())) {
                     String role = user.getRole().trim().toUpperCase(Locale.ROOT);
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(

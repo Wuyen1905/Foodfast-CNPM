@@ -70,7 +70,7 @@ public class WebSocketSecurityInterceptor implements ChannelInterceptor {
 
         User user = userRepository.findById(claims.userId())
                 .orElseThrow(() -> new AccessDeniedException("Tài khoản realtime không còn tồn tại"));
-        if ("suspended".equalsIgnoreCase(user.getRole())) {
+        if (!user.isAccountActive() || "suspended".equalsIgnoreCase(user.getRole())) {
             throw new AccessDeniedException("Tài khoản đã bị tạm ngưng");
         }
 

@@ -1,12 +1,12 @@
 # Quyết định kiến trúc và nghiệp vụ
 
-## ADR-01: Nhà hàng tự điều phối người giao
+## ADR-01: Quản trị viên điều phối người giao tập trung
 
-**Quyết định:** Không xây cổng shipper. Nhà hàng quản lý hồ sơ nhân viên và thao tác giao hàng trong dashboard hiện có.
+**Quyết định:** Không xây cổng shipper. Quản trị viên quản lý hồ sơ, hàng đợi nhiệm vụ và phân công shipper; nhà hàng chỉ chuẩn bị món đến trạng thái sẵn sàng giao.
 
-**Lý do:** Quy mô đồ án nhỏ, mỗi cửa hàng đã có người giao nội bộ. Một cổng riêng sẽ kéo theo đăng ký, xác thực, phân quyền, nhận đơn và xử lý tranh chấp nhưng không tạo thêm giá trị cho luồng cốt lõi.
+**Lý do:** Một lần đặt có thể tách thành nhiều đơn con nên điều phối tập trung giúp mỗi đơn có đúng một nhiệm vụ, kiểm soát một shipper chỉ giao một đơn và tránh nhà hàng nhìn hoặc thao tác dữ liệu của nhau.
 
-**Đánh đổi:** Nhân viên giao hàng không tự cập nhật trạng thái. Nhà hàng chịu trách nhiệm phân công, xác nhận bàn giao và báo Failed; khách hàng xác nhận Delivered.
+**Đánh đổi:** Shipper không tự cập nhật trạng thái. Quản trị viên ghi nhận bắt đầu hoặc giao thất bại; khách hàng xác nhận Delivered.
 
 ## ADR-02: Không theo dõi GPS
 
@@ -46,10 +46,18 @@
 
 **Ngoại lệ:** Nếu khách quên thao tác, nhà hàng chỉ được hoàn tất sau ETA 60 phút, phải nhập lý do và hệ thống lưu `completionSource=RESTAURANT_OVERRIDE`. Không tự động hoàn tất theo thời gian vì thời gian trôi qua không chứng minh khách đã nhận món.
 
-## ADR-08: Một nhà hàng cho mỗi giỏ hàng và đơn hàng
+## ADR-08: Giỏ nhiều nhà hàng, nhóm đặt hàng và đơn con
 
-**Quyết định:** Mỗi khách hàng có giỏ riêng và một giỏ chỉ chứa món của một nhà hàng. Khi chọn món thuộc nhà hàng khác, giao diện hỏi khách có muốn xóa giỏ hiện tại để chuyển nhà hàng hay không.
+**Quyết định:** Giỏ được chứa món từ nhiều nhà hàng. Khi xác nhận, backend tạo một nhóm đặt hàng và tách đúng một đơn con cho mỗi nhà hàng.
 
-**Lý do:** Mỗi nhà hàng tự xác nhận, chuẩn bị và điều phối người giao. Nếu một đơn chứa nhiều nhà hàng thì không thể xác định bên chịu trách nhiệm, phí giao hàng, ETA và trạng thái xử lý chung một cách nhất quán.
+**Lý do:** Đơn con giữ phí, giảm giá, thuế, trạng thái, nhiệm vụ giao và khoản đối soát riêng. Nhờ vậy từng nhà hàng chỉ xử lý phần của mình nhưng khách vẫn thanh toán và theo dõi theo một nhóm.
 
-**Bảo vệ phía máy chủ:** Backend tự lấy tên, giá, tình trạng còn bán và nhà hàng từ bảng sản phẩm. API từ chối HTTP 400 nếu các `productId` thuộc nhiều nhà hàng và trả HTTP 409 nếu khách cố thêm món của nhà hàng khác vào giỏ hiện tại.
+**Bảo vệ phía máy chủ:** Backend tự lấy tên, giá, tình trạng còn bán và nhà hàng từ bảng sản phẩm, sau đó tự nhóm sản phẩm. Một giao dịch VNPay có thể trả cả nhóm; IPN hợp lệ mới phân bổ số tiền xuống các đơn con.
+
+## ADR-09: Đối soát nhà hàng bằng bản chụp bất biến
+
+**Quyết định:** Khi nhân viên quản lý lập đợt đối soát, backend chụp các thành phần tiền của từng đơn vào bảng chi tiết và gắn ràng buộc duy nhất trên mã đơn.
+
+**Lý do:** Giá, voucher, tỷ lệ hoa hồng hoặc khoản hoàn có thể thay đổi về sau. Bản chụp giúp giải thích số tiền đã trả và ràng buộc duy nhất ngăn một giao dịch được đối soát hai lần.
+
+**Quyền:** Nhân viên có quyền quyết toán được lập và kiểm tra đợt; nhân viên có quyền đối soát thanh toán mới được đánh dấu đã trả. Vai trò Manager không truy cập API Admin.

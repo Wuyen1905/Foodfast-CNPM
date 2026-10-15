@@ -2,7 +2,6 @@ import apiClient from '@/config/axios';
 
 export type ComplaintCategory = 'MISSING_ITEM' | 'WRONG_ITEM' | 'DAMAGED_ITEM' | 'LATE_DELIVERY' | 'OTHER';
 export type ComplaintStatus = 'OPEN' | 'REVIEWING' | 'RESOLVED' | 'REJECTED';
-export type RefundStatus = 'NONE' | 'PENDING' | 'COMPLETED' | 'REJECTED';
 export type ComplaintActorRole = 'CUSTOMER' | 'RESTAURANT' | 'ADMIN';
 
 export interface ComplaintHistoryItem {
@@ -13,7 +12,6 @@ export interface ComplaintHistoryItem {
   fromStatus?: string;
   toStatus: string;
   note?: string;
-  refundAmount: number;
   createdAt: number;
 }
 
@@ -25,14 +23,10 @@ export interface Complaint {
   category: ComplaintCategory;
   description: string;
   evidenceUrls: string[];
-  requestedRefundAmount: number;
-  approvedRefundAmount: number;
   status: ComplaintStatus;
-  refundStatus: RefundStatus;
   handlerRole?: string;
   handlerId?: string;
   resolution?: string;
-  refundTransactionReference?: string;
   createdAt: number;
   updatedAt: number;
   resolvedAt?: number;
@@ -59,7 +53,6 @@ export async function createComplaint(body: {
   category: ComplaintCategory;
   description: string;
   evidenceUrls: string[];
-  requestedRefundAmount: number;
 }): Promise<Complaint> {
   return (await apiClient.post('/complaints', body)).data;
 }
@@ -98,17 +91,9 @@ export async function listComplaints(status?: ComplaintStatus): Promise<Complain
 export async function reviewComplaint(
   complaintId: string,
   body: {
-    action: 'START_REVIEW' | 'APPROVE_REFUND' | 'REJECT';
+    action: 'START_REVIEW' | 'RESOLVE' | 'REJECT';
     note?: string;
-    approvedRefundAmount?: number;
   },
 ): Promise<Complaint> {
   return (await apiClient.patch(`/complaints/${complaintId}/review`, body)).data;
-}
-
-export async function completeComplaintRefund(
-  complaintId: string,
-  body: { transactionReference: string; note?: string },
-): Promise<Complaint> {
-  return (await apiClient.patch(`/complaints/${complaintId}/refund/complete`, body)).data;
 }

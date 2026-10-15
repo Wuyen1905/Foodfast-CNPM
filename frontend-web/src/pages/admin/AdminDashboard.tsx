@@ -12,7 +12,9 @@ import AdminSupportCenter from '@/components/admin/AdminSupportCenter';
 import AdminAnalytics from '@/components/admin/AdminAnalytics';
 import AdminOrders from './AdminOrders';
 import VoucherManagement from '@/components/VoucherManagement';
-import {getAdminOverview,getAdminStats,getAllCustomers,getAllRestaurants,getAuditLogs,type AdminCustomer,type AdminOverview,type AdminRestaurant,type AdminStats} from '@/api/adminApi';
+import ManagerTable from '@/components/admin/ManagerTable';
+import AdminDeliveryDispatch from '@/components/admin/AdminDeliveryDispatch';
+import {getAdminOverview,getAdminStats,getAllCustomers,getAllManagers,getAllRestaurants,getAuditLogs,type AdminCustomer,type AdminManager,type AdminOverview,type AdminRestaurant,type AdminStats} from '@/api/adminApi';
 import type {SystemLog} from '@/types/admin';
 
 const Layout=styled.div`display:flex;min-height:100vh;background:#f5f7fa;`;
@@ -24,18 +26,18 @@ const Content=styled.div`margin-top:20px;`;
 const Empty=styled.div`background:#fff;border-radius:15px;padding:55px;text-align:center;color:#68707e;`;
 const Footer=styled.footer`text-align:center;padding:24px;color:#8b919c;margin-top:35px;border-top:1px solid #e1e5e9;`;
 
-export type AdminTab='overview'|'analytics'|'restaurants'|'customers'|'orders'|'vouchers'|'support'|'logs';
+export type AdminTab='overview'|'analytics'|'restaurants'|'customers'|'managers'|'orders'|'deliveries'|'vouchers'|'support'|'logs';
 interface Props{initialTab?:AdminTab}
-const defaultOverview:AdminOverview={ordersToday:0,revenueToday:0,revenueWeek:0,revenueMonth:0,failedDeliveries:0,failedDeliveryOrderIds:[],paymentReconciliationNeeded:0,reconciliationOrderIds:[],openComplaints:0,pendingRefunds:0,pendingRestaurants:0,openSupportTickets:0,overdueSupportTickets:0};
+const defaultOverview:AdminOverview={ordersToday:0,revenueToday:0,revenueWeek:0,revenueMonth:0,failedDeliveries:0,failedDeliveryOrderIds:[],paymentReconciliationNeeded:0,reconciliationOrderIds:[],openComplaints:0,pendingRefunds:0,pendingRefundOrderIds:[],pendingRestaurants:0,openSupportTickets:0,overdueSupportTickets:0};
 const defaultStats:AdminStats={totalCustomers:0,totalRestaurants:0,activeRestaurants:0,pendingRestaurants:0,totalOrders:0,totalRevenue:0,totalCouriers:0,activeCouriers:0,activeDeliveries:0,failedDeliveries:0};
-const labels:Record<AdminTab,{icon:string;title:string}>={overview:{icon:'📊',title:'Trung tâm vận hành'},analytics:{icon:'📈',title:'Báo cáo vận hành'},restaurants:{icon:'🏪',title:'Quản lý vòng đời nhà hàng'},customers:{icon:'👥',title:'Hồ sơ khách hàng'},orders:{icon:'📦',title:'Quản lý đơn hàng'},vouchers:{icon:'🎟️',title:'Quản lý mã giảm giá'},support:{icon:'🎫',title:'Hàng đợi hỗ trợ và hoàn tiền'},logs:{icon:'📋',title:'Nhật ký quản trị'}};
+const labels:Record<AdminTab,{icon:string;title:string}>={overview:{icon:'📊',title:'Trung tâm vận hành'},analytics:{icon:'📈',title:'Báo cáo vận hành'},restaurants:{icon:'🏪',title:'Quản lý vòng đời nhà hàng'},customers:{icon:'👥',title:'Hồ sơ khách hàng'},managers:{icon:'🧑‍💼',title:'Nhân viên quản lý'},orders:{icon:'📦',title:'Quản lý đơn hàng'},deliveries:{icon:'🛵',title:'Shipper và phân phối giao hàng'},vouchers:{icon:'🎟️',title:'Quản lý mã giảm giá'},support:{icon:'🎫',title:'Hỗ trợ và báo cáo sự cố'},logs:{icon:'📋',title:'Nhật ký quản trị'}};
 
 const AdminDashboard:React.FC<Props>=({initialTab='overview'})=>{
   const {admin,logout}=useAdminAuth();const navigate=useNavigate();
   const [activeTab,setActiveTab]=useState<AdminTab>(initialTab);const [filter,setFilter]=useState<AdminContextFilter>({});
-  const [restaurants,setRestaurants]=useState<AdminRestaurant[]>([]);const [customers,setCustomers]=useState<AdminCustomer[]>([]);const [logs,setLogs]=useState<SystemLog[]>([]);
+  const [restaurants,setRestaurants]=useState<AdminRestaurant[]>([]);const [customers,setCustomers]=useState<AdminCustomer[]>([]);const [managers,setManagers]=useState<AdminManager[]>([]);const [logs,setLogs]=useState<SystemLog[]>([]);
   const [stats,setStats]=useState<AdminStats>(defaultStats);const [overview,setOverview]=useState<AdminOverview>(defaultOverview);const [refreshKey,setRefreshKey]=useState(0);const [loading,setLoading]=useState(true);
-  const load=useCallback(async()=>{setLoading(true);try{const [restaurantData,customerData,statsData,logData,overviewData]=await Promise.all([getAllRestaurants(),getAllCustomers(),getAdminStats(),getAuditLogs(),getAdminOverview()]);setRestaurants(restaurantData);setCustomers(customerData);setStats(statsData);setLogs(logData);setOverview(overviewData);setRefreshKey(v=>v+1);}finally{setLoading(false);}},[]);
+  const load=useCallback(async()=>{setLoading(true);try{const [restaurantData,customerData,managerData,statsData,logData,overviewData]=await Promise.all([getAllRestaurants(),getAllCustomers(),getAllManagers(),getAdminStats(),getAuditLogs(),getAdminOverview()]);setRestaurants(restaurantData);setCustomers(customerData);setManagers(managerData);setStats(statsData);setLogs(logData);setOverview(overviewData);setRefreshKey(v=>v+1);}finally{setLoading(false);}},[]);
   useEffect(()=>{void load();},[load]);
   useEffect(()=>{if(!admin)navigate('/admin/login');},[admin,navigate]);
   if(!admin)return null;
@@ -49,7 +51,9 @@ const AdminDashboard:React.FC<Props>=({initialTab='overview'})=>{
         {activeTab==='analytics'&&<Content><AdminAnalytics/></Content>}
         {activeTab==='restaurants'&&<Content>{restaurants.length?<RestaurantTable key={`restaurant-${refreshKey}`} restaurants={restaurants} onUpdate={load} initialStatusFilter={filter.restaurantStatus||'all'}/>:<Empty>Chưa có dữ liệu nhà hàng.</Empty>}</Content>}
         {activeTab==='customers'&&<Content><CustomerTable key={`customer-${refreshKey}`} customers={customers} onUpdate={load}/></Content>}
+        {activeTab==='managers'&&<Content><ManagerTable key={`manager-${refreshKey}`} managers={managers} onUpdate={load}/></Content>}
         {activeTab==='orders'&&<Content><AdminOrders initialDateFilter={filter.orderDate} initialOrderIds={filter.orderIds}/></Content>}
+        {activeTab==='deliveries'&&<Content><AdminDeliveryDispatch/></Content>}
         {activeTab==='vouchers'&&<Content><VoucherManagement admin primary="#667eea"/></Content>}
         {activeTab==='support'&&<Content><AdminSupportCenter adminId={admin.id||admin.username||'admin'} initialFilter={filter.supportFilter||'all'} refreshKey={refreshKey}/></Content>}
         {activeTab==='logs'&&<Content><SystemLogs key={`logs-${refreshKey}`} logs={logs}/></Content>}

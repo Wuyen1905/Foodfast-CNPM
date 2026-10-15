@@ -86,7 +86,8 @@ public class AdminController {
         List<Order> orders = orderRepository.findAll();
 
         List<User> customers = users.stream()
-                .filter(u -> "customer".equals(u.getRole()) || "suspended".equals(u.getRole()))
+                .filter(u -> "customer".equalsIgnoreCase(u.getRole())
+                        || "suspended".equalsIgnoreCase(u.getRole()))
                 .collect(Collectors.toList());
 
         List<Restaurant> activeRestaurants = restaurants.stream()
@@ -162,18 +163,19 @@ public class AdminController {
 
     /**
      * PATCH /api/admin/users/{id}/suspend
-     * Suspend a customer by changing role to "suspended"
+     * Suspend a customer while preserving the customer's business role.
      */
     @PatchMapping("/users/{id}/suspend")
     public ResponseEntity<?> suspendCustomer(
             @PathVariable String id,
             @RequestBody @Valid AdminActionRequest request) {
         Optional<User> userOpt = userRepository.findById(id);
-        if (userOpt.isEmpty() || !"customer".equals(userOpt.get().getRole())) {
+        if (userOpt.isEmpty() || !"customer".equalsIgnoreCase(userOpt.get().getRole())
+                || !userOpt.get().isAccountActive()) {
             return ResponseEntity.notFound().build();
         }
         User user = userOpt.get();
-        user.setRole("suspended");
+        user.setAccountStatus("suspended");
         user.setSuspensionReason(request.getReason().trim());
         user.setAccountStatusUpdatedAt(System.currentTimeMillis());
         userRepository.save(user);
@@ -186,18 +188,23 @@ public class AdminController {
 
     /**
      * PATCH /api/admin/users/{id}/reactivate
-     * Reactivate a customer by changing role back to "customer"
+     * Reactivate a suspended customer.
      */
     @PatchMapping("/users/{id}/reactivate")
     public ResponseEntity<?> reactivateCustomer(
             @PathVariable String id,
             @RequestBody @Valid AdminActionRequest request) {
         Optional<User> userOpt = userRepository.findById(id);
-        if (userOpt.isEmpty() || !"suspended".equals(userOpt.get().getRole())) {
+        if (userOpt.isEmpty()
+                || !("customer".equalsIgnoreCase(userOpt.get().getRole())
+                || "suspended".equalsIgnoreCase(userOpt.get().getRole()))
+                || userOpt.get().isAccountActive()) {
             return ResponseEntity.notFound().build();
         }
         User user = userOpt.get();
         user.setRole("customer");
+        user.setAccountStatus("active");
+        user.setSuspensionReason(null);
         user.setAccountStatusUpdatedAt(System.currentTimeMillis());
         userRepository.save(user);
         auditLogService.record(
@@ -273,7 +280,8 @@ public class AdminController {
         List<Order> orders = orderRepository.findAll();
 
         List<Map<String, Object>> adminCustomers = users.stream()
-                .filter(u -> "customer".equals(u.getRole()) || "suspended".equals(u.getRole()))
+                .filter(u -> "customer".equalsIgnoreCase(u.getRole())
+                        || "suspended".equalsIgnoreCase(u.getRole()))
                 .map(user -> {
                     List<Order> customerOrders = orders.stream()
                             .filter(o -> user.getId().equals(o.getUserId()))
@@ -292,8 +300,7 @@ public class AdminController {
                             "totalSpend",
                             customerOrders.stream().mapToLong(RevenuePolicy::netRevenue).sum()
                     );
-                    // Map role to accountStatus: "customer" -> "Active", "suspended" -> "Suspended"
-                    String accountStatus = "suspended".equals(user.getRole()) ? "Suspended" : "Active";
+                    String accountStatus = user.isAccountActive() ? "Active" : "Suspended";
                     adminCustomer.put("accountStatus", accountStatus);
                     adminCustomer.put("createdAt", user.getCreatedAt() != null ? user.getCreatedAt() : System.currentTimeMillis());
                     // Convert Instant to Long timestamp for frontend

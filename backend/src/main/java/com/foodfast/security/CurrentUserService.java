@@ -41,6 +41,10 @@ public class CurrentUserService {
         return "ADMIN".equals(role());
     }
 
+    public boolean isManager() {
+        return "MANAGER".equals(role());
+    }
+
     public boolean isCustomer() {
         return "CUSTOMER".equals(role());
     }

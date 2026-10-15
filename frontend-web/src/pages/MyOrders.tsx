@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { useOrders, Order } from '@/context/OrderContext';
 import { useAuth } from '@/context';
-import { getOrders } from '@/api/orderApi';
+import { getOrderGroups, getOrders, OrderGroup } from '@/api/orderApi';
 import { formatVND } from '../utils/currency';
 import { getStatusLabel, getStatusColors } from '../utils/orderStatus';
 import { getPaymentStatusInfo } from '../utils/paymentStatus';
@@ -176,6 +176,17 @@ const ShopNowButton = styled(Link)`
   }
 `;
 
+const GroupCard = styled(Link)`
+  display: block;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 2px solid var(--primary);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  text-decoration: none;
+`;
+
 const sortNewestFirst = (list: Order[]) =>
   [...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
@@ -216,11 +227,29 @@ const MyOrders: React.FC = () => {
   const [guestOrders, setGuestOrders] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [groups, setGroups] = useState<OrderGroup[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setGroups([]);
+      return;
+    }
+    getOrderGroups().then(setGroups).catch(() => setGroups([]));
+  }, [user?.id]);
 
   const myOrders = useMemo(() => {
     if (!user) return [];
     return sortNewestFirst(orders.filter((o) => o.userId === user.id));
   }, [orders, user]);
+
+  const groupedOrderIds = useMemo(
+    () => new Set(groups.flatMap(group => group.orders.map(order => order.id))),
+    [groups],
+  );
+  const legacyOrders = useMemo(
+    () => myOrders.filter(order => !groupedOrderIds.has(order.id)),
+    [groupedOrderIds, myOrders],
+  );
 
   const handleSearch = async () => {
     if (!phone.trim()) {
@@ -247,15 +276,40 @@ const MyOrders: React.FC = () => {
     return (
       <Page>
         <Title>Đơn hàng của tôi</Title>
-        {myOrders.length === 0 ? (
+        {groups.length === 0 && legacyOrders.length === 0 ? (
           <EmptyState>
             <h3>Bạn chưa có đơn hàng nào</h3>
             <p>Hãy đặt món để theo dõi đơn hàng tại đây.</p>
             <ShopNowButton to="/menu">Đặt món ngay</ShopNowButton>
           </EmptyState>
-        ) : (
-          myOrders.map((order) => <OrderCardItem key={order.id} order={order} />)
-        )}
+        ) : <>
+          {groups.map(group => (
+            <GroupCard key={group.id} to={`/order-groups/${group.id}`}>
+              <CardHeader>
+                <div>
+                  <OrderCode>Nhóm {group.id}</OrderCode>
+                  <OrderDate>{dayjs(group.createdAt).format('HH:mm - DD/MM/YYYY')}</OrderDate>
+                </div>
+                <OrderTotal>{formatVND(group.total)}</OrderTotal>
+              </CardHeader>
+              <div style={{ marginTop: 10 }}>
+                {group.orderCount} đơn nhà hàng · {group.orders.map(order => order.restaurant || order.restaurantId).join(' · ')}
+              </div>
+              <CardFooter>
+                <BadgeGroup>
+                  {group.orders.map(order => {
+                    const colors = getStatusColors(order.status);
+                    return <StatusBadge key={order.id} $bg={colors.bg} $color={colors.color}>
+                      {order.restaurant || order.restaurantId}: {getStatusLabel(order.status)}
+                    </StatusBadge>;
+                  })}
+                </BadgeGroup>
+                <ViewDetails>Xem cả nhóm →</ViewDetails>
+              </CardFooter>
+            </GroupCard>
+          ))}
+          {legacyOrders.map((order) => <OrderCardItem key={order.id} order={order} />)}
+        </>}
       </Page>
     );
   }

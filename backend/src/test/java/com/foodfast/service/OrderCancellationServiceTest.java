@@ -44,6 +44,9 @@ class OrderCancellationServiceTest {
     @Mock
     private CustomerNotificationService customerNotificationService;
 
+    @Mock
+    private OrderGroupPaymentService orderGroupPaymentService;
+
     private OrderCancellationService service;
 
     @BeforeEach
@@ -54,7 +57,8 @@ class OrderCancellationServiceTest {
                 notificationService,
                 voucherService,
                 orderStatusHistoryService,
-                customerNotificationService
+                customerNotificationService,
+                orderGroupPaymentService
         );
     }
 

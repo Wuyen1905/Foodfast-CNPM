@@ -9,6 +9,8 @@ export interface VoucherApplication {
 export interface AvailableVoucher {
   code: string;
   name: string;
+  scope: 'GLOBAL' | 'RESTAURANT';
+  restaurantId?: string | null;
   discountType: VoucherDiscountType;
   discountValue: number;
   minOrderAmount: number;
@@ -26,6 +28,7 @@ export interface ManagedVoucher {
   code: string;
   name: string;
   restaurantId?: string | null;
+  scope: 'GLOBAL' | 'RESTAURANT';
   discountType: VoucherDiscountType;
   discountValue: number;
   minOrderAmount: number;
@@ -42,6 +45,7 @@ export interface VoucherUpsertPayload {
   code: string;
   name: string;
   restaurantId?: string | null;
+  scope: 'GLOBAL' | 'RESTAURANT';
   discountType: VoucherDiscountType;
   discountValue: number;
   minOrderAmount: number;

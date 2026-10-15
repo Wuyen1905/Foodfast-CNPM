@@ -2,12 +2,12 @@
 
 ## 1. Quyết định phạm vi
 
-FoodFast được xây dựng cho mô hình mỗi nhà hàng tự quản lý và phân công nhân viên giao hàng của mình.
+FoodFast được xây dựng theo mô hình nhiều nhà hàng: nhà hàng xử lý món, quản trị viên điều phối giao hàng tập trung, còn nhân viên quản lý phụ trách đối soát tiền nhà hàng.
 
 - Không xây dựng cổng hoặc ứng dụng riêng cho shipper.
 - Không theo dõi GPS theo thời gian thực.
 - Khách hàng theo dõi đơn bằng trạng thái, thời gian giao dự kiến và thông tin liên hệ.
-- Nhà hàng chịu trách nhiệm xác nhận, chuẩn bị, phân công, cập nhật giao hàng và xử lý sự cố.
+- Nhà hàng chịu trách nhiệm xác nhận và chuẩn bị món; quản trị viên quản lý hồ sơ shipper, phân công và cập nhật nhiệm vụ giao hàng.
 - AI chỉ tư vấn, tra cứu và định tuyến hỗ trợ; AI không tự ý hủy đơn, hoàn tiền hay đổi trạng thái.
 
 Phạm vi này đủ logic cho đồ án và tránh biến hệ thống thành một nền tảng logistics quá lớn.
@@ -15,19 +15,18 @@ Phạm vi này đủ logic cho đồ án và tránh biến hệ thống thành m
 ## 2. Luồng nghiệp vụ đích
 
 ```text
-Khách chọn một nhà hàng
-  -> thêm món và tùy chọn món
+Khách chọn món từ một hoặc nhiều nhà hàng
+  -> thêm món và tùy chọn món vào cùng giỏ
   -> nhập địa chỉ / ghi chú giao hàng
   -> hệ thống kiểm tra giờ mở cửa, tồn món, vùng giao và tính lại giá
-  -> tạo đơn một lần duy nhất
-  -> thanh toán hoặc chọn tiền mặt
-  -> nhà hàng xác nhận / từ chối có lý do
+  -> tạo một nhóm đặt hàng, tách một đơn con cho mỗi nhà hàng
+  -> thanh toán toàn nhóm qua VNPay hoặc chọn tiền mặt
+  -> từng nhà hàng xác nhận / từ chối đơn con có lý do
   -> chuẩn bị món
   -> đánh dấu sẵn sàng
-  -> phân công nhân viên của nhà hàng
+  -> quản trị viên phân công shipper cho từng đơn con
   -> đang giao
-  -> nhân viên báo đã giao
-  -> khách xác nhận đã nhận hoặc hệ thống tự hoàn tất sau thời gian chờ
+  -> khách xác nhận đã nhận hoặc quản trị viên ghi nhận ngoại lệ có lý do
   -> khách đánh giá / báo sự cố nếu có
 ```
 
@@ -46,13 +45,13 @@ Các trạng thái liên quan được tách đúng đối tượng:
 
 ## 3. Những phần dự án đã có
 
-- Giỏ hàng và đơn hàng chỉ thuộc một nhà hàng.
+- Giỏ hàng có thể chứa món của nhiều nhà hàng; backend tách thành nhóm và các đơn con độc lập.
 - Dashboard nhà hàng chỉ hiển thị đơn của đúng nhà hàng.
-- Nhà hàng quản lý và phân công nhân viên giao hàng nội bộ.
+- Quản trị viên quản lý tập trung hồ sơ shipper và phân công từng nhiệm vụ giao hàng.
 - Có thời gian giao dự kiến, giao thất bại, giao lại và xác nhận đã nhận hàng.
 - Có cơ chế tự hoàn tất nếu khách quên xác nhận.
 - Có cập nhật trạng thái theo thời gian thực.
-- Có thanh toán VNPay sandbox, lưu trạng thái và tạo lại phiên hết hạn.
+- Có thanh toán VNPay sandbox cho toàn nhóm đơn, phân bổ tiền xuống từng đơn con, chống callback lặp và tạo lại phiên hết hạn.
 - Có cờ món đang bán/hết món và kiểm tra lại món khi tạo đơn.
 - Có trợ lý hỗ trợ và phiếu yêu cầu hỗ trợ cơ bản.
 - Đăng nhập nhà hàng và việc cô lập đơn theo nhà hàng đã được sửa.
@@ -62,6 +61,7 @@ Các trạng thái liên quan được tách đúng đối tượng:
 - Tùy chọn món/topping/ghi chú với giá do backend xác minh.
 - Voucher có thời hạn, phạm vi nhà hàng, đơn tối thiểu và giới hạn lượt dùng.
 - Nhà hàng đề xuất thay món; khách chấp nhận/từ chối; hệ thống tính lại và ghi chờ hoàn phần chênh lệch.
+- Có vai trò nhân viên quản lý, đợt đối soát nhà hàng, công thức tiền do backend tính, lịch sử kiểm tra và thanh toán.
 
 ## 4. Khoảng trống và mức ưu tiên
 
@@ -93,19 +93,19 @@ Các trạng thái liên quan được tách đúng đối tượng:
 - Đặt món theo lịch.
 - **Đã hoàn thành:** Mã giảm giá có thời hạn, phạm vi nhà hàng, đơn tối thiểu và giới hạn lượt dùng.
 - Đặt lại đơn cũ, món yêu thích và lịch sử tìm kiếm.
-- Đơn nhóm và chia tiền (chỉ làm khi các luồng cốt lõi đã ổn định).
+- **Đã hoàn thành:** Đơn nhóm nhiều nhà hàng, một giao dịch VNPay và phân bổ tiền xuống từng đơn con.
 - **Đã hoàn thành:** Báo cáo thời gian xác nhận, thời gian chuẩn bị, thời gian giao, tỷ lệ hủy và giao đúng hẹn; hỗ trợ kỳ 7/30/90 ngày và xuất CSV.
 
 ## 5. Các quy tắc nghiệp vụ nên bảo vệ bằng mã
 
-1. Một giỏ hàng chỉ chứa món của một nhà hàng.
-2. Mỗi đơn chỉ thuộc một khách và một nhà hàng.
+1. Một giỏ có thể chứa món của nhiều nhà hàng; mỗi nhà hàng tạo đúng một đơn con trong cùng nhóm.
+2. Mỗi đơn con chỉ thuộc một khách và một nhà hàng.
 3. Nhà hàng chỉ nhìn thấy và cập nhật đơn của chính mình.
 4. Chỉ đơn đã thanh toán hoặc thanh toán tiền mặt hợp lệ mới được nhà hàng tiếp nhận.
 5. Chỉ chuyển trạng thái theo chuỗi cho phép; không được nhảy trực tiếp từ chờ xác nhận sang đã giao.
-6. Chỉ phân công nhân viên đang hoạt động và thuộc đúng nhà hàng của đơn.
+6. Chỉ quản trị viên phân công shipper đang hoạt động; mỗi shipper chỉ có một nhiệm vụ đang giao.
 7. Khách chỉ được xác nhận đã nhận đơn của chính mình và chỉ khi đơn đang giao.
-8. Nhà hàng có thể báo đã giao, nhưng cần chờ khách xác nhận; nếu khách im lặng thì tự hoàn tất sau thời gian cấu hình và lưu nguồn xác nhận.
+8. Khách xác nhận đã nhận là nguồn hoàn tất thông thường; mọi hoàn tất ngoại lệ phải có người thực hiện, lý do và nguồn xác nhận.
 9. Mọi thao tác hủy, từ chối, giao thất bại, hoàn tiền và thay đổi giá đều cần lý do và nhật ký.
 10. Callback VNPay phải kiểm tra chữ ký, mã đơn, số tiền và không xử lý hai lần.
 11. Giá, phí và giảm giá cuối cùng luôn do backend quyết định.

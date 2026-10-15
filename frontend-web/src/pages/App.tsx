@@ -16,6 +16,7 @@ const VNPayReturn = lazy(() => import('./VNPayReturn'));
 const OrderConfirmation = lazy(() => import('./OrderConfirmation'));
 const MyOrders = lazy(() => import('./MyOrders'));
 const OrderDetail = lazy(() => import('./OrderDetail'));
+const OrderGroupDetail = lazy(() => import('./OrderGroupDetail'));
 const Login = lazy(() => import('./Login'));
 const RegisterPage = lazy(() => import('./RegisterPage'));
 const RestaurantDashboard = lazy(() => import('./restaurant/RestaurantDashboard'));
@@ -25,6 +26,8 @@ const AlohaDashboard = lazy(() => import('./restaurant/AlohaDashboard'));
 const SupportChatWidget = lazy(() => import('../components/SupportChatWidget'));
 const Favorites = lazy(() => import('./Favorites'));
 const Addresses = lazy(() => import('./Addresses'));
+const ManagerHome = lazy(() => import('./manager/ManagerHome'));
+const ManagerLogin = lazy(() => import('./manager/ManagerLogin'));
 
 const PageLoading = () => (
   <div role="status" aria-live="polite" style={{ padding: '48px', textAlign: 'center' }}>
@@ -42,8 +45,9 @@ const RoleGuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: stri
   
   if (!allowedRoles.includes(user.role)) {
     // Redirect to appropriate page based on role
-    const redirectPath = user.role === 'restaurant' ? '/restaurant' : 
-                         user.role === 'admin' ? '/admin/dashboard' : '/menu';
+    const redirectPath = user.role === 'restaurant' ? '/restaurant' :
+                         user.role === 'admin' ? '/admin/dashboard' :
+                         user.role === 'manager' ? '/manager' : '/menu';
     return <Navigate to={redirectPath} replace />;
   }
   
@@ -52,12 +56,12 @@ const RoleGuardedRoute: React.FC<{ children: React.ReactNode; allowedRoles: stri
 
 const PublicNavbar: React.FC = () => {
   const { pathname } = useLocation();
-  return pathname.startsWith('/admin') ? null : <Navbar />;
+  return pathname.startsWith('/admin') || pathname.startsWith('/manager') ? null : <Navbar />;
 };
 
 const PublicFooter: React.FC = () => {
   const { pathname } = useLocation();
-  return pathname.startsWith('/admin') ? null : <><Footer /><SupportChatWidget /></>;
+  return pathname.startsWith('/admin') || pathname.startsWith('/manager') ? null : <><Footer /><SupportChatWidget /></>;
 };
 
 const App: React.FC = () => {
@@ -78,6 +82,13 @@ const App: React.FC = () => {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/customer-info" element={<Navigate to="/login" replace />} />
+
+            <Route path="/manager/login" element={<ManagerLogin />} />
+            <Route path="/manager" element={
+              <ProtectedRoute requireRole="manager" redirectTo="/manager/login">
+                <ManagerHome />
+              </ProtectedRoute>
+            } />
             
             {/* Protected routes for customers only */}
             <Route path="/cart" element={
@@ -114,6 +125,11 @@ const App: React.FC = () => {
             <Route path="/orders/:id" element={
               <RoleGuardedRoute allowedRoles={['customer']}>
                 <OrderDetail />
+              </RoleGuardedRoute>
+            } />
+            <Route path="/order-groups/:id" element={
+              <RoleGuardedRoute allowedRoles={['customer']}>
+                <OrderGroupDetail />
               </RoleGuardedRoute>
             } />
 

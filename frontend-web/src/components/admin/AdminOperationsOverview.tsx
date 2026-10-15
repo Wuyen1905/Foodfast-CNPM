@@ -12,7 +12,7 @@ export type AdminContextFilter = {
   restaurantStatus?: 'PENDING';
   orderDate?: 'today';
   orderIds?: string[];
-  supportFilter?: 'all'|'overdue'|'complaint'|'refund'|'ticket';
+  supportFilter?: 'all'|'overdue'|'complaint'|'ticket';
 };
 interface Props{overview:AdminOverview;onNavigate:(tab:AdminTab,filter?:AdminContextFilter)=>void;}
 
@@ -21,8 +21,8 @@ const AdminOperationsOverview:React.FC<Props>=({overview,onNavigate})=><>
     <Card onClick={()=>onNavigate('orders',{orderDate:'today'})}><span>📦 Đơn hôm nay</span><strong>{overview.ordersToday}</strong><small>Mở danh sách đơn được tạo hôm nay</small></Card>
     <Card $alert={overview.failedDeliveries>0} onClick={()=>onNavigate('orders',{orderIds:overview.failedDeliveryOrderIds})}><span>🛵 Giao thất bại</span><strong>{overview.failedDeliveries}</strong><small>Đơn cần kiểm tra nguyên nhân giao thất bại</small></Card>
     <Card $alert={overview.paymentReconciliationNeeded>0} onClick={()=>onNavigate('orders',{orderIds:overview.reconciliationOrderIds})}><span>💳 Cần đối soát</span><strong>{overview.paymentReconciliationNeeded}</strong><small>Thanh toán thiếu dữ liệu hoặc chờ quá hạn</small></Card>
-    <Card $alert={overview.openComplaints>0} onClick={()=>onNavigate('support',{supportFilter:'complaint'})}><span>🛟 Khiếu nại đang mở</span><strong>{overview.openComplaints}</strong><small>Mở hàng đợi xử lý khiếu nại</small></Card>
-    <Card $alert={overview.pendingRefunds>0} onClick={()=>onNavigate('support',{supportFilter:'refund'})}><span>💸 Chờ hoàn tiền</span><strong>{overview.pendingRefunds}</strong><small>Khoản hoàn đang cần xử lý</small></Card>
+    <Card $alert={overview.openComplaints>0} onClick={()=>onNavigate('support',{supportFilter:'complaint'})}><span>🛟 Sự cố đang xử lý</span><strong>{overview.openComplaints}</strong><small>Mở danh sách báo cáo từ khách hàng</small></Card>
+    <Card $alert={overview.pendingRefunds>0} onClick={()=>onNavigate('orders',{orderIds:overview.pendingRefundOrderIds})}><span>💸 Chờ hoàn giao dịch</span><strong>{overview.pendingRefunds}</strong><small>Đơn hủy hoặc từ chối cần hoàn tiền</small></Card>
     <Card $alert={overview.pendingRestaurants>0} onClick={()=>onNavigate('restaurants',{restaurantStatus:'PENDING'})}><span>🏪 Nhà hàng chờ duyệt</span><strong>{overview.pendingRestaurants}</strong><small>Kiểm tra hồ sơ và phê duyệt</small></Card>
     <Card onClick={()=>onNavigate('support',{supportFilter:'ticket'})}><span>🎫 Phiếu hỗ trợ đang mở</span><strong>{overview.openSupportTickets}</strong><small>Hàng đợi hỗ trợ toàn hệ thống</small></Card>
     <Card $alert={overview.overdueSupportTickets>0} onClick={()=>onNavigate('support',{supportFilter:'overdue'})}><span>⏰ Yêu cầu hỗ trợ quá hạn</span><strong>{overview.overdueSupportTickets}</strong><small>Đã quá thời gian cam kết xử lý</small></Card>

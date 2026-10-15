@@ -3,6 +3,7 @@ package com.foodfast.service;
 import com.foodfast.entity.Voucher;
 import com.foodfast.entity.VoucherDiscountType;
 import com.foodfast.entity.VoucherRedemptionStatus;
+import com.foodfast.entity.VoucherScope;
 import com.foodfast.repository.VoucherRedemptionRepository;
 import com.foodfast.repository.VoucherRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,6 +112,7 @@ class VoucherServiceTest {
     @Test
     void availableVoucherIncludesEstimatedDiscount() {
         Voucher voucher = voucher("WELCOME20", VoucherDiscountType.PERCENT, 20);
+        voucher.setScope(VoucherScope.GLOBAL);
         voucher.setMaxDiscount(30_000);
         when(voucherRepository.findAllByOrderByStartsAtDesc()).thenReturn(List.of(voucher));
 

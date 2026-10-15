@@ -10,10 +10,9 @@ import jakarta.persistence.Table;
 import java.util.UUID;
 
 /**
- * A delivery employee managed by one restaurant.
- *
- * Couriers intentionally do not have login accounts. Restaurant staff assign
- * them to orders and update delivery progress from the restaurant dashboard.
+ * A delivery employee managed centrally by FoodFast administrators. The
+ * optional restaurantId is only a home/priority restaurant, not an ownership
+ * boundary; administrators may dispatch the courier to any child order.
  */
 @Entity
 @Table(name = "restaurant_couriers")
@@ -23,7 +22,7 @@ public class RestaurantCourier {
     @Column(length = 50, nullable = false)
     private String id;
 
-    @Column(name = "restaurant_id", length = 50, nullable = false)
+    @Column(name = "restaurant_id", length = 50)
     private String restaurantId;
 
     @Column(length = 150, nullable = false)

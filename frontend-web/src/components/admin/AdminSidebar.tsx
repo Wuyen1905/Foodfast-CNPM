@@ -176,8 +176,8 @@ const UserRole = styled.div`
 `;
 
 interface AdminSidebarProps {
-  activeTab: 'overview' | 'analytics' | 'restaurants' | 'customers' | 'orders' | 'vouchers' | 'support' | 'logs';
-  onTabChange: (tab: 'overview' | 'analytics' | 'restaurants' | 'customers' | 'orders' | 'vouchers' | 'support' | 'logs') => void;
+  activeTab: 'overview' | 'analytics' | 'restaurants' | 'customers' | 'managers' | 'orders' | 'deliveries' | 'vouchers' | 'support' | 'logs';
+  onTabChange: (tab: 'overview' | 'analytics' | 'restaurants' | 'customers' | 'managers' | 'orders' | 'deliveries' | 'vouchers' | 'support' | 'logs') => void;
   adminName: string;
   stats?: {
     pendingRestaurants?: number;
@@ -254,6 +254,16 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         </NavItem>
 
         <NavItem
+          $active={activeTab === 'managers'}
+          onClick={() => onTabChange('managers')}
+          whileHover={{ x: 5 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <NavIcon>🧑‍💼</NavIcon>
+          <NavLabel>Nhân viên quản lý</NavLabel>
+        </NavItem>
+
+        <NavItem
           $active={activeTab === 'orders'}
           onClick={() => onTabChange('orders')}
           whileHover={{ x: 5 }}
@@ -261,6 +271,16 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         >
           <NavIcon>📦</NavIcon>
           <NavLabel>Đơn hàng</NavLabel>
+        </NavItem>
+
+        <NavItem
+          $active={activeTab === 'deliveries'}
+          onClick={() => onTabChange('deliveries')}
+          whileHover={{ x: 5 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <NavIcon>🛵</NavIcon>
+          <NavLabel>Shipper và giao hàng</NavLabel>
         </NavItem>
 
         <NavItem

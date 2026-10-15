@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * API-level end-to-end acceptance test for the core FoodFast business journey.
- * It crosses authentication, checkout, restaurant processing, delivery,
+ * It crosses authentication, checkout, restaurant processing, admin dispatch, delivery,
  * customer confirmation, history and durable customer notifications.
  */
 @SpringBootTest
@@ -38,7 +38,7 @@ class OrderDeliveryE2ETest {
     @Autowired private RestaurantRepository restaurantRepository;
 
     @Test
-    void customerCanOrderAndRestaurantCanDeliverWithCompleteAuditTrail() throws Exception {
+    void customerCanOrderRestaurantCanPrepareAndAdminCanDispatchWithCompleteAuditTrail() throws Exception {
         Restaurant restaurant = restaurantRepository.findById("rest_2").orElseThrow();
         restaurant.setIsActive(true);
         restaurant.setAcceptingOrders(true);
@@ -48,6 +48,7 @@ class OrderDeliveryE2ETest {
 
         String customerToken = login("user", "user123");
         String restaurantToken = login("sweetdreams", "sweet123");
+        String adminToken = login("admin", "admin123");
         String requestKey = "e2e-" + UUID.randomUUID();
 
         String createdBody = mockMvc.perform(post("/api/orders")
@@ -72,12 +73,12 @@ class OrderDeliveryE2ETest {
         patchStatus(orderId, "PREPARING", restaurantToken, "In Progress");
         patchStatus(orderId, "READY", restaurantToken, "Ready");
 
-        String assignedBody = mockMvc.perform(post("/api/deliveries/assign")
-                        .header("Authorization", bearer(restaurantToken))
+        String assignedBody = mockMvc.perform(post("/api/admin/deliveries/assign")
+                        .header("Authorization", bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "orderId", orderId,
-                                "courierId", "COURIER-SD-001",
+                                "courierId", "COURIER-SD-002",
                                 "estimatedDeliveryAt", System.currentTimeMillis() + 30 * 60 * 1000L,
                                 "deliveryNote", "Gọi khách trước khi đến"
                         ))))
@@ -86,8 +87,8 @@ class OrderDeliveryE2ETest {
                 .andReturn().getResponse().getContentAsString();
         String assignmentId = String.valueOf(readMap(assignedBody).get("id"));
 
-        mockMvc.perform(post("/api/deliveries/{id}/start", assignmentId)
-                        .header("Authorization", bearer(restaurantToken)))
+        mockMvc.perform(post("/api/admin/deliveries/{id}/start", assignmentId)
+                        .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DELIVERING"));
 

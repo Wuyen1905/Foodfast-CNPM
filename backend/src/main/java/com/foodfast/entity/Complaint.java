@@ -45,19 +45,9 @@ public class Complaint {
     @Column(name = "evidence_url", length = 500, nullable = false)
     private List<String> evidenceUrls = new ArrayList<>();
 
-    @Column(name = "requested_refund_amount", nullable = false)
-    private int requestedRefundAmount;
-
-    @Column(name = "approved_refund_amount", nullable = false)
-    private int approvedRefundAmount;
-
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     private ComplaintStatus status = ComplaintStatus.OPEN;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "refund_status", length = 20, nullable = false)
-    private RefundStatus refundStatus = RefundStatus.NONE;
 
     @Column(name = "handler_role", length = 20)
     private String handlerRole;
@@ -67,9 +57,6 @@ public class Complaint {
 
     @Column(length = 1200)
     private String resolution;
-
-    @Column(name = "refund_transaction_reference", length = 100)
-    private String refundTransactionReference;
 
     @Column(name = "created_at", nullable = false)
     private long createdAt;
@@ -107,22 +94,14 @@ public class Complaint {
     public void setDescription(String description) { this.description = description; }
     public List<String> getEvidenceUrls() { return evidenceUrls; }
     public void setEvidenceUrls(List<String> evidenceUrls) { this.evidenceUrls = evidenceUrls == null ? new ArrayList<>() : new ArrayList<>(evidenceUrls); }
-    public int getRequestedRefundAmount() { return requestedRefundAmount; }
-    public void setRequestedRefundAmount(int value) { requestedRefundAmount = Math.max(0, value); }
-    public int getApprovedRefundAmount() { return approvedRefundAmount; }
-    public void setApprovedRefundAmount(int value) { approvedRefundAmount = Math.max(0, value); }
     public ComplaintStatus getStatus() { return status; }
     public void setStatus(ComplaintStatus status) { this.status = status; }
-    public RefundStatus getRefundStatus() { return refundStatus; }
-    public void setRefundStatus(RefundStatus refundStatus) { this.refundStatus = refundStatus; }
     public String getHandlerRole() { return handlerRole; }
     public void setHandlerRole(String handlerRole) { this.handlerRole = handlerRole; }
     public String getHandlerId() { return handlerId; }
     public void setHandlerId(String handlerId) { this.handlerId = handlerId; }
     public String getResolution() { return resolution; }
     public void setResolution(String resolution) { this.resolution = resolution; }
-    public String getRefundTransactionReference() { return refundTransactionReference; }
-    public void setRefundTransactionReference(String value) { this.refundTransactionReference = value; }
     public long getCreatedAt() { return createdAt; }
     public long getUpdatedAt() { return updatedAt; }
     public Long getResolvedAt() { return resolvedAt; }

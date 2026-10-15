@@ -1206,7 +1206,6 @@ const OrderDetail: React.FC = () => {
             orderId={order.id}
             orderStatus={order.status}
             customerId={user.id}
-            orderTotal={order.total}
           />
         )}
 

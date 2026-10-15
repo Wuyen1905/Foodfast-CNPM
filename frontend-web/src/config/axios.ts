@@ -51,7 +51,8 @@ apiClient.interceptors.response.use(
         sessionStorage.removeItem('role');
 
         const adminRoute = window.location.pathname.startsWith('/admin');
-        const loginPath = adminRoute ? '/admin/login' : '/login';
+        const managerRoute = window.location.pathname.startsWith('/manager');
+        const loginPath = adminRoute ? '/admin/login' : managerRoute ? '/manager/login' : '/login';
         if (window.location.pathname !== loginPath) {
           window.location.assign(loginPath);
         }

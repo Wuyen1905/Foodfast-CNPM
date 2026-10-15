@@ -16,9 +16,11 @@
 !.env.example
 !**/.env.example
 !backend/.env.vnpay.local.example
+!backend/.env.mysql.local.example
 !frontend-web/.env.development
 !frontend-web/.env.production
 backend/.env.vnpay.local
+backend/.env.mysql.local
 
 # Runtime data and uploaded evidence
 backend/runtime-data/
@@ -49,6 +51,20 @@ diagnostics/
 /web/
 /tools/
 /node_modules/
+
+# Keep the published repository root intentionally small. Files and folders
+# outside this allow-list are legacy notes, local helpers, or generated work.
+/*
+!/.github/
+!/.gitattributes
+!/.gitignore
+!/README.md
+!/backend/
+!/docs/
+!/frontend-web/
+!/run_all.bat
+!/run_all.sh
+!/start-foodfast-vnpay.ps1
 
 # Editors and operating systems
 .vscode/

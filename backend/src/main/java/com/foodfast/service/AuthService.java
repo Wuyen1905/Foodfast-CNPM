@@ -52,7 +52,7 @@ public class AuthService {
 
         User user = matchedUser.orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
-        if ("suspended".equalsIgnoreCase(user.getRole())) {
+        if (!user.isAccountActive() || "suspended".equalsIgnoreCase(user.getRole())) {
             throw new RuntimeException("Tài khoản đã bị tạm ngưng");
         }
 
@@ -109,6 +109,7 @@ public class AuthService {
         user.setEmail(normalizedEmail);
         user.setPhone(normalizedPhone);
         user.setRole("customer");
+        user.setAccountStatus("active");
         user.setOrderCount(0);
         user.setCreatedAt(System.currentTimeMillis());
 

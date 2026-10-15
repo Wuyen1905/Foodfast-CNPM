@@ -207,7 +207,11 @@ const getActionIcon = (action: SystemLog['action']): string => {
     customer_activated: '✅',
     courier_deactivated: '🛵',
     emergency_override: '⚠️',
-    order_status_changed: '📦'
+    order_status_changed: '📦',
+    manager_created: '🧑‍💼',
+    manager_updated: '✏️',
+    manager_suspended: '⛔',
+    manager_activated: '✅'
   };
   return icons[action] || '📋';
 };
@@ -221,7 +225,11 @@ const getActionLabel = (action: SystemLog['action']): string => {
     customer_activated: 'Kích hoạt khách hàng',
     courier_deactivated: 'Ngừng hoạt động nhân viên giao hàng',
     emergency_override: 'Can thiệp khẩn cấp',
-    order_status_changed: 'Thay đổi trạng thái đơn hàng'
+    order_status_changed: 'Thay đổi trạng thái đơn hàng',
+    manager_created: 'Tạo nhân viên quản lý',
+    manager_updated: 'Cập nhật và phân quyền quản lý',
+    manager_suspended: 'Khóa nhân viên quản lý',
+    manager_activated: 'Kích hoạt nhân viên quản lý'
   };
   return labels[action] || 'Hành động không xác định';
 };
@@ -235,6 +243,7 @@ const getSeverityLabel = (severity: SystemLog['severity']): string => ({
 const getTargetTypeLabel = (targetType: SystemLog['targetType']): string => ({
   restaurant: 'Nhà hàng',
   customer: 'Khách hàng',
+  manager: 'Nhân viên quản lý',
   courier: 'Nhân viên giao hàng',
   order: 'Đơn hàng',
 }[targetType] || 'Không xác định');

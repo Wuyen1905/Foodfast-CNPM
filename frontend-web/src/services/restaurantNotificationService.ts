@@ -118,3 +118,20 @@ export const determineRestaurantFromCartItems = (
   return null;
 };
 
+export const groupCartItemsByRestaurant = <T extends {
+  id: string;
+  productId?: string;
+  restaurantId?: string;
+}>(cartItems: T[]): Record<string, T[]> => {
+  return cartItems.reduce<Record<string, T[]>>((groups, item) => {
+    const restaurantId = item.restaurantId
+      ? normalizeRestaurantId(item.restaurantId)
+      : getRestaurantIdFromProductId(item.productId || item.id);
+    if (!restaurantId) {
+      throw new Error('Không xác định được nhà hàng của một món trong giỏ');
+    }
+    groups[restaurantId] = [...(groups[restaurantId] || []), item];
+    return groups;
+  }, {});
+};
+

@@ -54,6 +54,8 @@ export const useRoleGuard = () => {
         return '/admin/dashboard';
       case 'restaurant':
         return '/restaurant';
+      case 'manager':
+        return '/manager';
       case 'customer':
         return '/menu';
       default:

@@ -7,15 +7,8 @@ import { formatVND } from '../../utils/currency';
 import { useOrders, OrderStatus } from '@/context/OrderContext';
 import { getStatusLabel, getStatusColors } from '@/utils/orderStatus';
 import {
-  assignDelivery,
-  cancelDelivery,
-  completeDeliveryByRestaurantOverride,
   DeliveryDetails,
-  failDelivery,
-  listCouriers,
   listRestaurantDeliveries,
-  RestaurantCourier,
-  startDelivery,
 } from '@/api/deliveryApi';
 import { subscribeDeliveryUpdates } from '@/realtime/socket';
 import CancellationDialog, { CANCELLATION_REASON_LABELS } from '@/components/CancellationDialog';
@@ -395,21 +388,10 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({ restaurantId, theme }) =>
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({});
-  const [couriers, setCouriers] = useState<RestaurantCourier[]>([]);
   const [deliveriesByOrder, setDeliveriesByOrder] = useState<Record<string, DeliveryDetails>>({});
-  const [courierSelection, setCourierSelection] = useState<Record<string, string>>({});
-  const [etaMinutes, setEtaMinutes] = useState<Record<string, string>>({});
-  const [deliveryNotes, setDeliveryNotes] = useState<Record<string, string>>({});
-  const [deliveryBusy, setDeliveryBusy] = useState<Record<string, boolean>>({});
-  const [deliveryClock, setDeliveryClock] = useState(Date.now());
   const [cancellationOrderId, setCancellationOrderId] = useState<string | null>(null);
   const [cancellationBusy, setCancellationBusy] = useState(false);
   const [replacementProducts, setReplacementProducts] = useState<Product[]>([]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setDeliveryClock(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     getAllProducts().then(setReplacementProducts).catch(error => {
@@ -419,11 +401,7 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({ restaurantId, theme }) =>
 
   const loadDeliveryData = async () => {
     try {
-      const [courierData, deliveryData] = await Promise.all([
-        listCouriers(restaurantId, true),
-        listRestaurantDeliveries(restaurantId),
-      ]);
-      setCouriers(courierData);
+      const deliveryData = await listRestaurantDeliveries(restaurantId);
       setDeliveriesByOrder(
         deliveryData.reduce<Record<string, DeliveryDetails>>((result, delivery) => {
           if (!result[delivery.orderId]) result[delivery.orderId] = delivery;
@@ -663,76 +641,6 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({ restaurantId, theme }) =>
     }
   };
 
-  const runDeliveryAction = async (
-    orderId: string,
-    action: () => Promise<DeliveryDetails>,
-    successMessage: string,
-  ) => {
-    setDeliveryBusy(previous => ({ ...previous, [orderId]: true }));
-    try {
-      const delivery = await action();
-      setDeliveriesByOrder(previous => ({ ...previous, [orderId]: delivery }));
-      toast.success(successMessage);
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Không thể cập nhật giao hàng');
-    } finally {
-      setDeliveryBusy(previous => ({ ...previous, [orderId]: false }));
-    }
-  };
-
-  const handleAssignDelivery = (orderId: string) => {
-    const courierId = courierSelection[orderId];
-    if (!courierId) {
-      toast.error('Vui lòng chọn nhân viên giao hàng');
-      return;
-    }
-    const minutes = Number(etaMinutes[orderId] || 30);
-    if (!Number.isFinite(minutes) || minutes < 5 || minutes > 240) {
-      toast.error('Thời gian giao dự kiến phải từ 5 đến 240 phút');
-      return;
-    }
-    runDeliveryAction(
-      orderId,
-      () => assignDelivery({
-        orderId,
-        courierId,
-        estimatedDeliveryAt: Date.now() + minutes * 60_000,
-        deliveryNote: deliveryNotes[orderId]?.trim() || undefined,
-      }),
-      'Đã phân công nhân viên giao hàng',
-    );
-  };
-
-  const handleFailDelivery = (orderId: string, delivery: DeliveryDetails) => {
-    const reason = window.prompt('Nhập lý do giao thất bại:');
-    if (!reason?.trim()) return;
-    runDeliveryAction(
-      orderId,
-      () => failDelivery(delivery.id, reason.trim()),
-      'Đã ghi nhận giao thất bại; đơn trở về trạng thái sẵn sàng',
-    );
-  };
-
-  const handleRestaurantOverride = (orderId: string, delivery: DeliveryDetails) => {
-    const reason = window.prompt(
-      'Nhập lý do hoàn tất ngoại lệ (ít nhất 10 ký tự). Ví dụ: Người giao báo khách đã nhận đủ món:',
-    );
-    if (!reason?.trim()) return;
-    if (reason.trim().length < 10) {
-      toast.error('Lý do hoàn tất ngoại lệ phải có ít nhất 10 ký tự');
-      return;
-    }
-    runDeliveryAction(
-      orderId,
-      () => completeDeliveryByRestaurantOverride(
-        restaurantId,
-        delivery.id,
-        reason.trim(),
-      ),
-      'Đã hoàn tất ngoại lệ và lưu lý do để truy vết',
-    );
-  };
-
   return (
     <OrderContainer>
       <SectionHeader>
@@ -862,176 +770,27 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({ restaurantId, theme }) =>
                 </NotesSection>
               )}
 
+              {order.status === 'Ready' && (
+                <DeliveryPanel>
+                  <DeliveryTitle>🛵 Đã chuyển sang hàng đợi giao hàng</DeliveryTitle>
+                  <DeliveryInfo>
+                    Nhà hàng đã hoàn tất món. Admin FoodFast sẽ phân công hoặc đổi shipper cho đơn này.
+                  </DeliveryInfo>
+                </DeliveryPanel>
+              )}
               {(() => {
                 const delivery = deliveriesByOrder[order.id];
-                const isActiveDelivery = delivery && ['ASSIGNED', 'DELIVERING'].includes(delivery.status);
-                const overrideAvailableAt = delivery?.estimatedDeliveryAt
-                  ? delivery.estimatedDeliveryAt + 60 * 60_000
-                  : Number.POSITIVE_INFINITY;
-                const canCompleteByOverride = deliveryClock >= overrideAvailableAt;
-
-                if (order.status === 'Ready' && !isActiveDelivery) {
-                  return (
-                    <DeliveryPanel>
-                      <DeliveryTitle>🛵 Phân công giao hàng</DeliveryTitle>
-                      {delivery?.status === 'FAILED' && (
-                        <DeliveryInfo>
-                          Lần giao trước thất bại: <strong>{delivery.failureReason}</strong>. Hãy chọn nhân viên để giao lại.
-                        </DeliveryInfo>
-                      )}
-                      {delivery?.status === 'CANCELLED' && (
-                        <DeliveryInfo>Phân công trước đã bị hủy. Có thể chọn nhân viên khác.</DeliveryInfo>
-                      )}
-                      <DeliveryGrid>
-                        <DeliveryField>
-                          <DeliveryFieldLabel>Nhân viên giao hàng *</DeliveryFieldLabel>
-                          <DeliverySelect
-                            aria-label={`Nhân viên giao đơn ${order.id}`}
-                            value={courierSelection[order.id] || ''}
-                            onChange={event => setCourierSelection(previous => ({
-                              ...previous,
-                              [order.id]: event.target.value,
-                            }))}
-                          >
-                            <option value="">Chọn nhân viên</option>
-                            {couriers.map(courier => (
-                              <option key={courier.id} value={courier.id}>
-                                {courier.name} · {courier.vehicleType || 'Chưa có phương tiện'}
-                              </option>
-                            ))}
-                          </DeliverySelect>
-                        </DeliveryField>
-                        <DeliveryField>
-                          <DeliveryFieldLabel>Thời gian giao dự kiến *</DeliveryFieldLabel>
-                          <DeliveryInputWithUnit>
-                            <DeliveryEtaInput
-                              type="number"
-                              min="5"
-                              max="240"
-                              step="5"
-                              aria-label={`Thời gian giao dự kiến của đơn ${order.id}, tính bằng phút`}
-                              value={etaMinutes[order.id] || '30'}
-                              onChange={event => setEtaMinutes(previous => ({
-                                ...previous,
-                                [order.id]: event.target.value,
-                              }))}
-                            />
-                            <DeliveryInputUnit>phút</DeliveryInputUnit>
-                          </DeliveryInputWithUnit>
-                        </DeliveryField>
-                        <DeliveryField>
-                          <DeliveryFieldLabel>Ghi chú giao hàng</DeliveryFieldLabel>
-                          <DeliveryInput
-                            aria-label={`Ghi chú giao đơn ${order.id}`}
-                            placeholder="Ví dụ: gọi khách trước khi đến"
-                            value={deliveryNotes[order.id] || ''}
-                            onChange={event => setDeliveryNotes(previous => ({
-                              ...previous,
-                              [order.id]: event.target.value,
-                            }))}
-                          />
-                        </DeliveryField>
-                      </DeliveryGrid>
-                      {(() => {
-                        const minutes = Number(etaMinutes[order.id] || 30);
-                        return Number.isFinite(minutes) && minutes >= 5 && minutes <= 240 ? (
-                          <DeliveryEtaPreview>
-                            ⏱ Dự kiến giao lúc {dayjs().add(minutes, 'minute').format('HH:mm DD/MM/YYYY')} (sau {minutes} phút)
-                          </DeliveryEtaPreview>
-                        ) : (
-                          <DeliveryEtaPreview>Thời gian cho phép: từ 5 đến 240 phút.</DeliveryEtaPreview>
-                        );
-                      })()}
-                      {couriers.length === 0 ? (
-                        <DeliveryInfo>
-                          Chưa có nhân viên hoạt động. Hãy thêm nhân viên ở tab “Nhân viên giao hàng”.
-                        </DeliveryInfo>
-                      ) : (
-                        <ActionButton
-                          $variant="success"
-                          disabled={deliveryBusy[order.id]}
-                          onClick={() => handleAssignDelivery(order.id)}
-                        >
-                          Phân công
-                        </ActionButton>
-                      )}
-                    </DeliveryPanel>
-                  );
-                }
-
-                if (!isActiveDelivery) return null;
-
-                return (
-                  <DeliveryPanel>
-                    <DeliveryTitle>
-                      {delivery.status === 'ASSIGNED' ? '📋 Đã phân công' : '🛵 Đang giao hàng'}
-                    </DeliveryTitle>
-                    <DeliveryInfo>
-                      <strong>{delivery.courierName}</strong><br />
-                      {delivery.vehicleType || 'Chưa cập nhật phương tiện'}
-                      {delivery.licensePlate ? ` · ${delivery.licensePlate}` : ''}<br />
-                      Dự kiến giao: {delivery.estimatedDeliveryAt
-                        ? dayjs(delivery.estimatedDeliveryAt).format('HH:mm DD/MM/YYYY')
-                        : 'Chưa có'}
-                      {delivery.deliveryNote && <><br />Ghi chú: {delivery.deliveryNote}</>}
-                    </DeliveryInfo>
-                    {delivery.status === 'DELIVERING' && (
-                      <DeliveryInfo>
-                        {canCompleteByOverride
-                          ? '⚠️ Chỉ dùng nút xác nhận khi người giao đã báo khách nhận đủ món. Hệ thống sẽ lưu người xác nhận, thời gian và lý do.'
-                          : `⏳ Đang chờ khách xác nhận. Nếu khách quên, nút xác nhận của nhà hàng sẽ mở từ ${dayjs(overrideAvailableAt).format('HH:mm DD/MM/YYYY')}.`}
-                      </DeliveryInfo>
-                    )}
-                    <ActionButtons>
-                      {delivery.status === 'ASSIGNED' && (
-                        <>
-                          <ActionButton
-                            $variant="success"
-                            disabled={deliveryBusy[order.id]}
-                            onClick={() => runDeliveryAction(
-                              order.id,
-                              () => startDelivery(delivery.id),
-                              'Đã bắt đầu giao hàng',
-                            )}
-                          >
-                            Bắt đầu giao hàng
-                          </ActionButton>
-                          <ActionButton
-                            $variant="danger"
-                            disabled={deliveryBusy[order.id]}
-                            onClick={() => runDeliveryAction(
-                              order.id,
-                              () => cancelDelivery(delivery.id),
-                              'Đã hủy phân công',
-                            )}
-                          >
-                            Hủy phân công
-                          </ActionButton>
-                        </>
-                      )}
-                      {delivery.status === 'DELIVERING' && (
-                        <>
-                          {canCompleteByOverride && (
-                            <ActionButton
-                              $primary={theme.primary}
-                              disabled={deliveryBusy[order.id]}
-                              onClick={() => handleRestaurantOverride(order.id, delivery)}
-                            >
-                              Xác nhận đã giao khi khách chưa phản hồi
-                            </ActionButton>
-                          )}
-                          <ActionButton
-                            $variant="danger"
-                            disabled={deliveryBusy[order.id]}
-                            onClick={() => handleFailDelivery(order.id, delivery)}
-                          >
-                            Báo giao thất bại
-                          </ActionButton>
-                        </>
-                      )}
-                    </ActionButtons>
-                  </DeliveryPanel>
-                );
+                if (!delivery || !['ASSIGNED', 'DELIVERING'].includes(delivery.status)) return null;
+                return <DeliveryPanel>
+                  <DeliveryTitle>{delivery.status === 'ASSIGNED' ? '📋 Admin đã phân shipper' : '🛵 Shipper đang giao'}</DeliveryTitle>
+                  <DeliveryInfo>
+                    <strong>{delivery.courierName}</strong><br />
+                    {delivery.vehicleType || 'Chưa cập nhật phương tiện'}
+                    {delivery.licensePlate ? ` · ${delivery.licensePlate}` : ''}<br />
+                    Dự kiến giao: {delivery.estimatedDeliveryAt
+                      ? dayjs(delivery.estimatedDeliveryAt).format('HH:mm DD/MM/YYYY') : 'Chưa có'}
+                  </DeliveryInfo>
+                </DeliveryPanel>;
               })()}
 
               <OrderFooter>

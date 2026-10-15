@@ -68,7 +68,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           email: response.user.email,
           restaurantId: response.user.restaurantId,
           orderCount: response.user.orderCount,
-          createdAt: response.user.createdAt
+          createdAt: response.user.createdAt,
+          accountStatus: response.user.accountStatus,
+          managerPermissions: response.user.managerPermissions
         };
 
         // Lưu theo phiên tab trước khi setUser để ProtectedRoute nhìn thấy ngay.
@@ -136,10 +138,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAdmin = () => user?.role === "admin";
   const isRestaurant = () => user?.role === "restaurant";
   const isCustomer = () => user?.role === "customer";
+  const isManager = () => user?.role === "manager";
   const setPhone = (phone: string) => user && setUser({ ...user, phone });
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin, isRestaurant, isCustomer, setPhone }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin, isRestaurant, isCustomer, isManager, setPhone }}>
       {loading ? (
         <div style={{
           display: 'flex',
@@ -172,6 +175,7 @@ export const useAuth = (): AuthContextValue => {
       isAdmin: () => false,
       isRestaurant: () => false,
       isCustomer: () => false,
+      isManager: () => false,
       setPhone: () => {}
     };
   }

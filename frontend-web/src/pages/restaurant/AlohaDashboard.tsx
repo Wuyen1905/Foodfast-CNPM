@@ -11,7 +11,6 @@ import MenuManagement from '@/components/restaurant/MenuManagement';
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import VoucherManagement from '@/components/VoucherManagement';
 import OrderTracking from '@/components/restaurant/OrderTracking';
-import CourierManagement from '@/components/restaurant/CourierManagement';
 import RestaurantOperations from '@/components/restaurant/RestaurantOperations';
 import SupportTicketInbox from '@/components/SupportTicketInbox';
 import ComplaintInbox from '@/components/ComplaintInbox';
@@ -216,7 +215,7 @@ const ErrorMessage = styled.div`
   border-left: 4px solid #c33;
 `;
 
-type TabType = 'overview' | 'operations' | 'menu' | 'vouchers' | 'orders' | 'couriers' | 'support';
+type TabType = 'overview' | 'operations' | 'menu' | 'vouchers' | 'orders' | 'support';
 
 const AlohaDashboard: React.FC = () => {
   const auth = useAuth();
@@ -474,7 +473,6 @@ const AlohaDashboard: React.FC = () => {
     { id: 'menu' as TabType, icon: '🍽️', label: 'Quản lý món ăn' },
     { id: 'vouchers' as TabType, icon: '🎟️', label: 'Khuyến mãi' },
     { id: 'orders' as TabType, icon: '📦', label: 'Quản lý đơn hàng' },
-    { id: 'couriers' as TabType, icon: '🛵', label: 'Nhân viên giao hàng' },
     { id: 'support' as TabType, icon: '🎫', label: 'Hỗ trợ & khiếu nại' },
   ];
 
@@ -524,12 +522,6 @@ const AlohaDashboard: React.FC = () => {
               restaurantId={user?.restaurantId || 'aloha'} 
               theme={alohaTheme} 
             />
-          </div>
-        );
-      case 'couriers':
-        return (
-          <div style={{ padding: '24px' }}>
-            <CourierManagement restaurantId={user?.restaurantId || 'aloha'} theme={alohaTheme} />
           </div>
         );
       case 'vouchers':

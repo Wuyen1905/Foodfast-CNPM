@@ -5,6 +5,7 @@ import com.foodfast.entity.Voucher;
 import com.foodfast.entity.VoucherDiscountType;
 import com.foodfast.entity.VoucherRedemption;
 import com.foodfast.entity.VoucherRedemptionStatus;
+import com.foodfast.entity.VoucherScope;
 import com.foodfast.repository.VoucherRedemptionRepository;
 import com.foodfast.repository.VoucherRepository;
 import org.springframework.stereotype.Service;
@@ -49,10 +50,8 @@ public class VoucherService {
                 .filter(Voucher::isActive)
                 .filter(voucher -> !current.isBefore(voucher.getStartsAt())
                         && !current.isAfter(voucher.getEndsAt()))
-                .filter(voucher -> !StringUtils.hasText(voucher.getRestaurantId())
-                        || RestaurantIdentityPolicy.refersToSameRestaurant(
-                                voucher.getRestaurantId(), restaurantId
-                        ))
+                .filter(voucher -> voucher.getScope() == VoucherScope.GLOBAL
+                        || RestaurantIdentityPolicy.refersToSameRestaurant(voucher.getRestaurantId(), restaurantId))
                 .map(voucher -> availableResponse(voucher, normalizedUserId, safeSubtotal))
                 .filter(response -> response != null)
                 .sorted(Comparator
@@ -108,7 +107,8 @@ public class VoucherService {
         if (!voucher.isActive()) throw new IllegalArgumentException("Mã ưu đãi đã ngừng hoạt động");
         if (current.isBefore(voucher.getStartsAt())) throw new IllegalArgumentException("Mã ưu đãi chưa bắt đầu");
         if (current.isAfter(voucher.getEndsAt())) throw new IllegalArgumentException("Mã ưu đãi đã hết hạn");
-        if (StringUtils.hasText(voucher.getRestaurantId())
+        if (voucher.getScope() == VoucherScope.RESTAURANT
+                && StringUtils.hasText(voucher.getRestaurantId())
                 && !RestaurantIdentityPolicy.refersToSameRestaurant(voucher.getRestaurantId(), restaurantId)) {
             throw new IllegalArgumentException("Mã ưu đãi không áp dụng cho nhà hàng này");
         }
@@ -129,7 +129,7 @@ public class VoucherService {
             throw new IllegalArgumentException("Bạn đã dùng hết lượt của mã ưu đãi này");
         }
         int discount = calculateDiscount(voucher, subtotal);
-        return new VoucherApplication(voucher.getCode(), voucher.getName(), discount);
+        return new VoucherApplication(voucher.getCode(), voucher.getName(), voucher.getScope(), discount);
     }
 
     private String requireUser(String userId) {
@@ -159,7 +159,8 @@ public class VoucherService {
                 ? "Có thể áp dụng cho đơn hàng này"
                 : "Mua thêm " + amountNeeded + " đ để sử dụng";
         return new AvailableVoucherResponse(
-                voucher.getCode(), voucher.getName(), voucher.getDiscountType(),
+                voucher.getCode(), voucher.getName(), voucher.getScope(), voucher.getRestaurantId(),
+                voucher.getDiscountType(),
                 voucher.getDiscountValue(), voucher.getMinOrderAmount(), voucher.getMaxDiscount(),
                 voucher.getEndsAt(), eligible, amountNeeded, estimatedDiscount, message
         );
@@ -173,7 +174,7 @@ public class VoucherService {
         return Math.min(Math.max(0, discount), subtotal);
     }
 
-    public record VoucherApplication(String code, String name, int discountAmount) {
-        public static VoucherApplication none() { return new VoucherApplication(null, null, 0); }
+    public record VoucherApplication(String code, String name, VoucherScope scope, int discountAmount) {
+        public static VoucherApplication none() { return new VoucherApplication(null, null, null, 0); }
     }
 }

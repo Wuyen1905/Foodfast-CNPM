@@ -144,7 +144,7 @@ public class SupportChatService {
         if (deliveryOptional.isEmpty()) {
             return response(
                     "Đơn " + order.getId() + " hiện " + statusLabel(order)
-                            + ", nhưng nhà hàng chưa phân công người giao nên chưa có thời gian giao dự kiến.",
+                            + ", nhưng quản trị viên chưa phân công người giao nên chưa có thời gian giao dự kiến.",
                     intent, null, order.getId());
         }
 
@@ -159,13 +159,13 @@ public class SupportChatService {
 
         if (delivery.getStatus() == DeliveryStatus.FAILED) {
             return response("Lần giao gần nhất của đơn " + order.getId()
-                            + " chưa thành công; nhà hàng đang cần phân công giao lại nên hiện chưa có ETA mới.",
+                            + " chưa thành công; quản trị viên đang cần phân công giao lại nên hiện chưa có thời gian giao dự kiến mới.",
                     intent, null, order.getId());
         }
 
         if (delivery.getEstimatedDeliveryAt() == null) {
             return response("Đơn " + order.getId() + " hiện " + statusLabel(order)
-                            + ", nhưng nhà hàng chưa cập nhật thời gian giao dự kiến.",
+                            + ", nhưng quản trị viên chưa cập nhật thời gian giao dự kiến.",
                     intent, null, order.getId());
         }
 
@@ -262,7 +262,7 @@ public class SupportChatService {
     private void appendDeliveryDetails(StringBuilder reply, DeliveryAssignment delivery) {
         String courierName = courierName(delivery.getCourierId());
         if (delivery.getStatus() == DeliveryStatus.ASSIGNED) {
-            reply.append(". Nhà hàng đã phân công ").append(courierName);
+            reply.append(". Quản trị viên đã phân công ").append(courierName);
             appendEta(reply, delivery.getEstimatedDeliveryAt());
             reply.append(".");
             return;
@@ -285,7 +285,7 @@ public class SupportChatService {
             if (delivery.getFailureReason() != null) {
                 reply.append(" vì ").append(delivery.getFailureReason());
             }
-            reply.append("; nhà hàng có thể phân công giao lại.");
+            reply.append("; quản trị viên có thể phân công giao lại.");
             return;
         }
         reply.append(".");
@@ -296,7 +296,7 @@ public class SupportChatService {
             RestaurantCourier courier = deliveryService.findCourier(courierId);
             return courier.getName();
         } catch (RuntimeException ignored) {
-            return "nhân viên của nhà hàng";
+            return "nhân viên giao hàng";
         }
     }
 

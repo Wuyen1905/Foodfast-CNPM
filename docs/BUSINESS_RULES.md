@@ -3,9 +3,10 @@
 ## Vai trò và phạm vi
 
 - Khách hàng đặt món, thanh toán và theo dõi đơn trên web.
-- Nhà hàng xác nhận, chuẩn bị đơn, quản lý nhân viên giao hàng và cập nhật tiến độ giao.
-- Nhân viên giao hàng là nhân sự nội bộ của nhà hàng. Họ không có tài khoản hoặc cổng đăng nhập riêng.
-- Quản trị viên xử lý tài khoản, thanh toán và các phiếu hỗ trợ cấp hệ thống.
+- Nhà hàng xác nhận, chuẩn bị và đánh dấu món đã sẵn sàng giao.
+- Nhân viên giao hàng không có cổng đăng nhập riêng; quản trị viên quản lý hồ sơ và phân công nhiệm vụ giao hàng.
+- Quản trị viên xử lý tài khoản, giao hàng, hoàn tiền và các phiếu hỗ trợ cấp hệ thống.
+- Nhân viên quản lý tài chính lập, kiểm tra và ghi nhận thanh toán các đợt đối soát nhà hàng theo quyền được giao.
 
 ## Quy tắc đơn hàng
 
@@ -14,9 +15,9 @@
 | BR-01 | Luồng chuẩn là Pending, Confirmed, Preparing, Ready, Delivering, Delivered. |
 | BR-02 | Đơn có thể bị hủy trước khi bắt đầu giao. Delivered và Cancelled là trạng thái kết thúc. |
 | BR-03 | Không được bỏ qua bước, ví dụ Pending không thể chuyển thẳng sang Ready hoặc Delivered. |
-| BR-04 | Nhà hàng xác nhận đã bàn giao để chuyển Ready sang Delivering. Chỉ khách hàng sở hữu đơn xác nhận đã nhận hàng để chuyển Delivering sang Delivered. |
+| BR-04 | Nhà hàng đưa đơn đến Ready; quản trị viên phân công shipper và xác nhận bắt đầu giao. Chỉ khách hàng sở hữu đơn xác nhận đã nhận hàng để chuyển Delivering sang Delivered. |
 | BR-05 | Trạng thái thanh toán độc lập với trạng thái giao hàng. Thanh toán thành công không đồng nghĩa đã giao. |
-| BR-22 | Mỗi giỏ hàng và mỗi đơn chỉ được chứa món của đúng một nhà hàng. Khi khách chọn món ở nhà hàng khác, hệ thống phải yêu cầu xác nhận xóa giỏ hiện tại trước khi chuyển nhà hàng. |
+| BR-22 | Giỏ hàng được chứa món của nhiều nhà hàng. Khi khách xác nhận, hệ thống tạo một nhóm đặt hàng và tách thành đúng một đơn con cho mỗi nhà hàng. Một đơn con không được chứa món của nhà hàng khác. |
 | BR-23 | Giỏ hàng thuộc về một khách hàng cụ thể. Khi tạo đơn, backend tự tra sản phẩm để xác minh nhà hàng, tên, giá và trạng thái còn bán; không tin các giá trị này từ trình duyệt. |
 | BR-24 | Khi phiên VNPay hết hạn hoặc thất bại, khách được thanh toán lại trên cùng đơn đang chờ. Hệ thống phải tạo `vnp_TxnRef` mới, vô hiệu hóa phiên cũ và không tạo đơn hàng trùng. |
 | BR-28 | Mọi lần hủy đơn phải ghi người thực hiện, vai trò, mã lý do, chi tiết và thời điểm. Không cho phép hủy đơn đã giao hoặc đã hủy. |
@@ -29,6 +30,14 @@
 | BR-55 | `OrderStatus`, `DeliveryStatus` và `PaymentStatus` là ba vòng đời độc lập. Không dùng trạng thái thanh toán để suy ra trạng thái chế biến/giao hàng và không dùng trạng thái phân công để thay thế trạng thái đơn. |
 | BR-56 | Mọi lần đổi `OrderStatus` phải lưu trạng thái cũ/mới, người thực hiện, vai trò, nguồn thao tác, lý do và thời điểm. Lịch sử chỉ được xem bởi chủ đơn, nhà hàng sở hữu đơn hoặc quản trị viên. |
 | BR-57 | Thông báo của khách phải được lưu bền vững, chỉ chủ tài khoản được đọc/đánh dấu đã đọc và có liên kết tới đúng đơn. WebSocket chỉ giúp cập nhật realtime, không thay thế dữ liệu đã lưu. |
+| BR-58 | Mỗi đơn con có phí giao, mã giảm giá, thuế, tổng tiền và trạng thái riêng. Tổng nhóm chỉ là tổng các giá trị đã lưu của các đơn con. |
+| BR-59 | Khách xem được toàn bộ đơn con trong nhóm của mình; mỗi nhà hàng chỉ xem và xử lý đơn con thuộc chính nhà hàng đó. |
+| BR-60 | Một giao dịch VNPay thanh toán toàn bộ nhóm đơn và backend phân bổ đúng tổng tiền cho từng đơn con. COD chỉ được ghi nhận đã trả trên từng đơn sau khi giao thành công. |
+| BR-61 | Nếu một nhà hàng từ chối đơn con trước khi thanh toán, tổng phải trả của nhóm được tính lại và phiên VNPay cũ bị vô hiệu hóa. Nếu đã thanh toán, hệ thống tạo khoản hoàn tương ứng cho đơn con. |
+| BR-62 | Mỗi đơn con tạo đúng một nhiệm vụ giao hàng. Chỉ quản trị viên được phân công hoặc đổi shipper; một shipper chỉ có một nhiệm vụ Assigned hoặc Delivering. |
+| BR-63 | Mỗi đơn đã giao và thanh toán hợp lệ chỉ được thuộc một đợt đối soát nhà hàng. Ràng buộc duy nhất ở cơ sở dữ liệu ngăn đối soát lặp. |
+| BR-64 | Tiền nhà hàng nhận bằng tiền món cộng thuế thuộc nhà hàng, trừ giảm giá nhà hàng chịu, hoa hồng, khoản hoàn và điều chỉnh. Toàn bộ thành phần do backend tính, không nhận lợi nhuận từ frontend. |
+| BR-65 | Đợt đối soát đi lần lượt qua Chờ kiểm tra, Chờ thanh toán và Đã thanh toán; hệ thống lưu người cùng thời gian lập, kiểm tra và thanh toán. |
 
 ## Quy tắc tài khoản
 
@@ -77,11 +86,11 @@
 
 | Mã | Quy tắc |
 |---|---|
-| BR-06 | Mỗi nhân viên giao hàng thuộc đúng một nhà hàng. |
-| BR-07 | Chỉ nhân viên đang hoạt động và thuộc nhà hàng của đơn mới được phân công. |
-| BR-08 | Chỉ đơn Ready mới được phân công. Mỗi đơn chỉ có một phân công đang hoạt động. |
+| BR-06 | Hồ sơ shipper do quản trị viên quản lý tập trung; nhà hàng gợi ý trên hồ sơ chỉ phục vụ ưu tiên điều phối, không phải ranh giới sở hữu. |
+| BR-07 | Chỉ shipper đang hoạt động mới được quản trị viên phân công. |
+| BR-08 | Chỉ đơn Ready mới được phân công. Mỗi đơn có đúng một nhiệm vụ và mỗi shipper chỉ có một nhiệm vụ đang hoạt động. |
 | BR-09 | Luồng phân công là Assigned, Delivering, Delivered; nguồn xác nhận hoàn tất phải được lưu để truy vết. |
-| BR-10 | Giao thất bại phải có lý do. Đơn quay về Ready để nhà hàng phân công lại. |
+| BR-10 | Giao thất bại phải có lý do. Đơn và nhiệm vụ quay về hàng chờ để quản trị viên phân công lại. |
 | BR-11 | Không thể ngừng hoạt động một nhân viên đang có đơn Assigned hoặc Delivering. |
 | BR-12 | ETA phải nằm trong tương lai. Giao diện giới hạn từ 5 đến 240 phút. |
 | BR-13 | Khách chỉ xem tên, phương tiện, biển số, ETA và trạng thái. Hệ thống không theo dõi GPS và không công khai số điện thoại nội bộ. |
@@ -121,7 +130,7 @@ Tài liệu chi tiết và quan hệ phối hợp giữa ba vòng đời nằm t
 | Confirmed | Preparing, Cancelled |
 | Preparing | Ready, Cancelled |
 | Ready | Delivering, Cancelled |
-| Delivering | Delivered khi khách xác nhận; Delivered ngoại lệ sau ETA 60 phút có lý do; Ready khi nhà hàng báo giao thất bại có lý do |
+| Delivering | Delivered khi khách xác nhận; Delivered ngoại lệ sau ETA 60 phút có lý do; Ready khi quản trị viên ghi nhận giao thất bại có lý do |
 | Delivered | Không có |
 | Cancelled | Không có |
 
@@ -131,10 +140,11 @@ API web và API lịch sử cùng biểu diễn `Pending`, `Confirmed`, `In Prog
 
 | Trạng thái hiện tại | Trạng thái hợp lệ tiếp theo |
 |---|---|
+| Waiting | Assigned, Cancelled |
 | Assigned | Delivering, Failed, Cancelled |
 | Delivering | Delivered, Failed, Cancelled |
 | Delivered | Không có |
-| Failed | Không có; muốn giao lại phải tạo phân công mới |
+| Failed | Hệ thống lưu lần thất bại rồi đưa chính nhiệm vụ về Waiting để quản trị viên phân công lại |
 | Cancelled | Không có |
 
 ### Trạng thái thanh toán (`PaymentStatus`)

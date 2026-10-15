@@ -11,13 +11,11 @@ import {
   openComplaintEvidence,
   uploadComplaintEvidence,
 } from '@/api/complaintApi';
-import { formatVND } from '@/utils/currency';
 
 interface Props {
   orderId: string;
   orderStatus: string;
   customerId: string;
-  orderTotal: number;
 }
 
 const box: React.CSSProperties = {
@@ -29,14 +27,12 @@ const input: React.CSSProperties = {
   border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card)', color: 'var(--text)',
 };
 
-const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId, orderTotal }) => {
+const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId }) => {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [category, setCategory] = useState<ComplaintCategory>('MISSING_ITEM');
   const [description, setDescription] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidencePreviews, setEvidencePreviews] = useState<string[]>([]);
-  const [refundMode, setRefundMode] = useState<'NONE' | 'PARTIAL' | 'FULL'>('NONE');
-  const [refund, setRefund] = useState(0);
   const [busy, setBusy] = useState(false);
   const eligible = orderStatus === 'Delivering' || orderStatus === 'Delivered';
 
@@ -46,7 +42,7 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
       const all = await listComplaints();
       setComplaints(all.filter(item => item.orderId === orderId));
     } catch (error) {
-      console.error('Không thể tải khiếu nại', error);
+      console.error('Không thể tải báo cáo sự cố', error);
     }
   };
 
@@ -56,10 +52,6 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
     setEvidencePreviews(previews);
     return () => previews.forEach(preview => URL.revokeObjectURL(preview));
   }, [evidenceFiles]);
-  const requestedRefundAmount = refundMode === 'FULL'
-    ? orderTotal
-    : refundMode === 'PARTIAL' ? refund : 0;
-
   const evidenceRequired = category === 'WRONG_ITEM' || category === 'DAMAGED_ITEM';
 
   const selectEvidence = (files: FileList | null) => {
@@ -80,10 +72,6 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
       toast.error('Vui lòng chọn ít nhất một ảnh bằng chứng');
       return;
     }
-    if (refundMode === 'PARTIAL' && (refund <= 0 || refund > orderTotal)) {
-      toast.error('Số tiền đề nghị hoàn phải lớn hơn 0 và không vượt quá tổng đơn');
-      return;
-    }
     setBusy(true);
     try {
       const evidenceUrls = await Promise.all(evidenceFiles.map(uploadComplaintEvidence));
@@ -92,16 +80,13 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
         category,
         description: description.trim(),
         evidenceUrls,
-        requestedRefundAmount,
       });
-      toast.success('Đã gửi khiếu nại tới bộ phận xử lý');
+      toast.success('Đã gửi báo cáo sự cố tới bộ phận xử lý');
       setDescription('');
       setEvidenceFiles([]);
-      setRefundMode('NONE');
-      setRefund(0);
       await load();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Không thể gửi khiếu nại');
+      toast.error(error?.response?.data?.message || 'Không thể gửi báo cáo sự cố');
     } finally {
       setBusy(false);
     }
@@ -110,20 +95,15 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
   if (!eligible && complaints.length === 0) return null;
   return (
     <section style={box}>
-      <strong>🛟 Khiếu nại và yêu cầu hoàn tiền</strong>
+      <strong>🛟 Báo cáo sự cố đơn hàng</strong>
       <div style={{ marginTop: 6, color: 'var(--secondaryText)', fontSize: 14 }}>
-        Mỗi đơn chỉ tạo một hồ sơ khiếu nại. Mọi quyết định đều được lưu trong lịch sử.
+        Hãy mô tả vấn đề và gửi ảnh nếu cần. Mỗi đơn chỉ tạo một báo cáo và mọi kết quả đều được lưu trong lịch sử.
       </div>
 
       {complaints.map(item => (
         <div key={item.id} style={{ marginTop: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 8 }}>
           <b>{item.id} · {COMPLAINT_CATEGORY_LABELS[item.category]}</b>
           <div>Trạng thái: {COMPLAINT_STATUS_LABELS[item.status]}</div>
-          <div>
-            {item.requestedRefundAmount > 0
-              ? `Đề nghị hoàn: ${formatVND(item.requestedRefundAmount)}`
-              : 'Khách chỉ yêu cầu kiểm tra và phản hồi'}
-          </div>
           {item.evidenceUrls.length > 0 && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {item.evidenceUrls.map((url, index) => (
@@ -133,7 +113,6 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
               ))}
             </div>
           )}
-          {item.approvedRefundAmount > 0 && <div>Được duyệt: {formatVND(item.approvedRefundAmount)}</div>}
           {item.resolution && <div>Kết quả: {item.resolution}</div>}
           <details style={{ marginTop: 8 }}>
             <summary>Lịch sử xử lý ({item.history.length})</summary>
@@ -158,7 +137,7 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
           fontSize: 14,
           lineHeight: 1.5,
         }}>
-          Hồ sơ khiếu nại của đơn này đã được ghi nhận nên không thể tạo thêm hồ sơ mới.
+          Báo cáo sự cố của đơn này đã được ghi nhận nên không thể tạo thêm báo cáo mới.
           Nếu chưa đồng ý với kết quả, bạn có thể mở Trợ lý FoodFast để yêu cầu chuyển tiếp hỗ trợ.
         </div>
       )}
@@ -205,31 +184,12 @@ const OrderComplaintPanel: React.FC<Props> = ({ orderId, orderStatus, customerId
               </div>
             )}
           </div>
-          <label style={{ display: 'block', marginTop: 14, fontWeight: 700 }}>
-            Mong muốn xử lý
-            <select value={refundMode} onChange={event => setRefundMode(event.target.value as typeof refundMode)} style={input}>
-              <option value="NONE">Kiểm tra và phản hồi, chưa yêu cầu hoàn tiền</option>
-              <option value="PARTIAL">Đề nghị hoàn một phần</option>
-              <option value="FULL">Đề nghị hoàn toàn bộ đơn ({formatVND(orderTotal)})</option>
-            </select>
-          </label>
-          {refundMode === 'PARTIAL' && (
-            <label style={{ display: 'block', marginTop: 12, fontWeight: 700 }}>
-              Số tiền đề nghị hoàn (tối đa {formatVND(orderTotal)})
-              <input
-                type="number" min={1000} max={orderTotal} step={1000} value={refund || ''}
-                onChange={event => setRefund(Number(event.target.value))}
-                placeholder="Ví dụ: 25.000"
-                style={input}
-              />
-            </label>
-          )}
           <button
             type="button" disabled={busy || description.trim().length < 10}
             onClick={submit}
             style={{ marginTop: 10, padding: '10px 16px', border: 0, borderRadius: 8, background: 'var(--primary)', color: '#fff', fontWeight: 700 }}
           >
-            {busy ? 'Đang gửi...' : 'Gửi khiếu nại'}
+            {busy ? 'Đang gửi...' : 'Gửi báo cáo sự cố'}
           </button>
         </div>
       )}

@@ -40,6 +40,7 @@ public class OrderCancellationService {
     private final VoucherService voucherService;
     private final OrderStatusHistoryService orderStatusHistoryService;
     private final CustomerNotificationService customerNotificationService;
+    private final OrderGroupPaymentService orderGroupPaymentService;
 
     public OrderCancellationService(
             OrderRepository orderRepository,
@@ -47,7 +48,8 @@ public class OrderCancellationService {
             NotificationService notificationService,
             VoucherService voucherService,
             OrderStatusHistoryService orderStatusHistoryService,
-            CustomerNotificationService customerNotificationService
+            CustomerNotificationService customerNotificationService,
+            OrderGroupPaymentService orderGroupPaymentService
     ) {
         this.orderRepository = orderRepository;
         this.orderEventPublisher = orderEventPublisher;
@@ -55,6 +57,7 @@ public class OrderCancellationService {
         this.voucherService = voucherService;
         this.orderStatusHistoryService = orderStatusHistoryService;
         this.customerNotificationService = customerNotificationService;
+        this.orderGroupPaymentService = orderGroupPaymentService;
     }
 
     @Transactional
@@ -80,9 +83,11 @@ public class OrderCancellationService {
 
         if (PaymentStatusPolicy.isPaid(order)) {
             order.setPaymentStatus(PaymentStatusPolicy.REFUND_PENDING);
+            order.setPartialRefundAmount(order.getTotal());
         }
 
         Order saved = orderRepository.save(order);
+        orderGroupPaymentService.refreshForOrder(saved);
         String historyReason = StringUtils.hasText(request.detail)
                 ? request.detail.trim() : request.reasonCode.name();
         orderStatusHistoryService.record(

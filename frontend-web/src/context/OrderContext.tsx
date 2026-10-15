@@ -21,6 +21,8 @@ export type { OrderStatus } from '@/types/status';
 
 export type Order = {
   id: string;
+  orderGroupId?: string;
+  groupPosition?: number;
   name: string;
   phone: string;
   customerEmail?: string;
@@ -103,6 +105,8 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         // Transform to Order format
         const transformed = data.map((o: any) => ({
           id: o.id,
+          orderGroupId: o.orderGroupId,
+          groupPosition: o.groupPosition,
           name: o.name || o.customerName,
           phone: o.phone || o.customerPhone,
           customerEmail: o.customerEmail,
@@ -202,6 +206,8 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       // Transform response to Order format and add to state
       const newOrder: Order = {
         id: response.id,
+        orderGroupId: response.orderGroupId,
+        groupPosition: response.groupPosition,
         name: response.name || response.customerName || '',
         phone: response.phone || response.customerPhone || '',
         customerEmail: response.customerEmail,

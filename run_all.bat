@@ -36,6 +36,18 @@ REM Get the script directory
 set SCRIPT_DIR=%~dp0
 cd /d "%SCRIPT_DIR%"
 
+sc query MySQL84 | find "RUNNING" >nul
+if %ERRORLEVEL% NEQ 0 (
+    echo Starting MySQL84...
+    net start MySQL84 >nul 2>nul
+    if %ERRORLEVEL% NEQ 0 (
+        echo Error: MySQL84 is not running. Start this script as Administrator once,
+        echo or start MySQL84 in Windows Services.
+        pause
+        exit /b 1
+    )
+)
+
 echo [1/2] Starting Spring Boot Backend on port 8080...
 start "FoodFast Backend" cmd /k "cd /d %SCRIPT_DIR%backend && echo ✅ Backend starting... && mvn spring-boot:run"
 timeout /t 5 /nobreak >nul
@@ -52,7 +64,7 @@ echo.
 echo 📋 Services running:
 echo    • Backend API:  http://localhost:8080
 echo    • Web App:      http://localhost:5173
-echo    • H2 data:      backend\runtime-data\foodfast.mv.db
+echo    • MySQL data:   foodfast_dev on 127.0.0.1:3306
 echo.
 echo 💡 Tip: Backend and web app run in separate terminal windows.
 echo    Close individual windows to stop specific services.

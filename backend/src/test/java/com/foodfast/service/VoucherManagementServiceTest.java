@@ -3,6 +3,7 @@ package com.foodfast.service;
 import com.foodfast.dto.VoucherUpsertRequest;
 import com.foodfast.entity.Voucher;
 import com.foodfast.entity.VoucherDiscountType;
+import com.foodfast.entity.VoucherScope;
 import com.foodfast.exception.ForbiddenOperationException;
 import com.foodfast.repository.RestaurantRepository;
 import com.foodfast.repository.VoucherRedemptionRepository;
@@ -90,7 +91,7 @@ class VoucherManagementServiceTest {
         )).hasMessageContaining("100%");
 
         VoucherUpsertRequest invalidUsage = new VoucherUpsertRequest(
-                "LIMIT", "Giới hạn", null, VoucherDiscountType.FIXED, 10_000,
+                "LIMIT", "Giới hạn", null, VoucherScope.GLOBAL, VoucherDiscountType.FIXED, 10_000,
                 0, 0, now, now.plus(2, ChronoUnit.DAYS), 1, 2, true
         );
         when(voucherRepository.findByCodeIgnoreCase("LIMIT")).thenReturn(Optional.empty());
@@ -105,7 +106,9 @@ class VoucherManagementServiceTest {
             int value
     ) {
         return new VoucherUpsertRequest(
-                code, "Chương trình " + code, restaurantId, type, value,
+                code, "Chương trình " + code, restaurantId,
+                restaurantId == null ? VoucherScope.GLOBAL : VoucherScope.RESTAURANT,
+                type, value,
                 50_000, type == VoucherDiscountType.PERCENT ? 40_000 : 0,
                 now, now.plus(30, ChronoUnit.DAYS), 100, 1, true
         );

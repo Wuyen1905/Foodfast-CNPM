@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
@@ -56,7 +55,6 @@ class CartServiceTest {
                 .thenReturn(List.of());
         service = new CartService(
                 cartItemRepository,
-                productRepository,
                 orderRepository,
                 realtimeService,
                 new ProductOptionPricingService(productOptionGroupRepository),
@@ -85,7 +83,7 @@ class CartServiceTest {
     }
 
     @Test
-    void rejectsProductFromAnotherRestaurant() {
+    void acceptsProductFromAnotherRestaurantForGroupedCheckout() {
         CartItem existing = new CartItem();
         existing.setUserId("u2");
         existing.setProductId("sd-1");
@@ -94,15 +92,16 @@ class CartServiceTest {
         when(productRepository.findById("ak-2")).thenReturn(Optional.of(pizza));
         when(cartItemRepository.findByUserIdOrderByIdAsc("u2"))
                 .thenReturn(List.of(existing));
+        when(cartItemRepository.findByUserIdAndVariantKey("u2", "ak-2||"))
+                .thenReturn(Optional.empty());
+        when(cartItemRepository.save(any(CartItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        CartRestaurantConflictException error = assertThrows(
-                CartRestaurantConflictException.class,
-                () -> service.addItem("u2", "ak-2", 1)
-        );
+        service.addItem("u2", "ak-2", 1);
 
-        assertEquals("rest_2", error.getCurrentRestaurantId());
-        assertEquals("restaurant_2", error.getRequestedRestaurantId());
-        verify(cartItemRepository, never()).save(any(CartItem.class));
+        ArgumentCaptor<CartItem> captor = ArgumentCaptor.forClass(CartItem.class);
+        verify(cartItemRepository).save(captor.capture());
+        assertEquals("restaurant_2", captor.getValue().getRestaurantCode());
     }
 
     @Test

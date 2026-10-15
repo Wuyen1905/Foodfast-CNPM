@@ -92,8 +92,14 @@ public class AdminOperationsService {
         response.put("openComplaints", complaints.stream()
                 .filter(item -> item.getStatus() == ComplaintStatus.OPEN
                         || item.getStatus() == ComplaintStatus.REVIEWING).count());
-        response.put("pendingRefunds", complaints.stream()
-                .filter(item -> item.getRefundStatus() == RefundStatus.PENDING).count());
+        List<Order> pendingRefundOrders = orders.stream()
+                .filter(item -> PaymentStatusPolicy.REFUND_PENDING.equals(
+                                PaymentStatusPolicy.normalize(item.getPaymentStatus()))
+                        || PaymentStatusPolicy.PARTIAL_REFUND_PENDING.equals(
+                                PaymentStatusPolicy.normalize(item.getPaymentStatus())))
+                .toList();
+        response.put("pendingRefunds", pendingRefundOrders.size());
+        response.put("pendingRefundOrderIds", pendingRefundOrders.stream().map(Order::getId).toList());
         response.put("pendingRestaurants", restaurants.stream()
                 .filter(item -> item.getAdminStatus() == RestaurantLifecycleStatus.PENDING).count());
         response.put("openSupportTickets", tickets.stream()
@@ -200,7 +206,7 @@ public class AdminOperationsService {
         response.put("username", customer.getUsername());
         response.put("email", customer.getEmail());
         response.put("phone", customer.getPhone());
-        response.put("accountStatus", "suspended".equalsIgnoreCase(customer.getRole()) ? "Suspended" : "Active");
+        response.put("accountStatus", customer.isAccountActive() ? "Active" : "Suspended");
         response.put("createdAt", customer.getCreatedAt());
         response.put("lastLoginAt", customer.getLastLoginAt());
         response.put("suspensionReason", customer.getSuspensionReason());
@@ -350,8 +356,6 @@ public class AdminOperationsService {
         map.put("orderId", item.getOrderId());
         map.put("category", item.getCategory());
         map.put("status", item.getStatus());
-        map.put("refundStatus", item.getRefundStatus());
-        map.put("approvedRefundAmount", item.getApprovedRefundAmount());
         map.put("createdAt", item.getCreatedAt());
         return map;
     }
@@ -389,10 +393,6 @@ public class AdminOperationsService {
     }
 
     private Map<String, Object> complaintQueueItem(Complaint item) {
-        SupportPriority priority = item.getRefundStatus() == RefundStatus.PENDING
-                ? SupportPriority.URGENT : SupportPriority.HIGH;
-        SupportDepartment department = item.getRefundStatus() == RefundStatus.PENDING
-                ? SupportDepartment.FINANCE : SupportDepartment.OPERATIONS;
         long dueAt = SupportDeadlinePolicy.complaintDeadline(item);
 
         Map<String, Object> map = new LinkedHashMap<>();
@@ -402,10 +402,8 @@ public class AdminOperationsService {
         map.put("restaurantId", item.getRestaurantId());
         map.put("summary", item.getDescription());
         map.put("status", item.getStatus());
-        map.put("refundStatus", item.getRefundStatus());
-        map.put("refundAmount", item.getApprovedRefundAmount());
-        map.put("priority", priority);
-        map.put("department", department);
+        map.put("priority", SupportPriority.HIGH);
+        map.put("department", SupportDepartment.OPERATIONS);
         map.put("assignedId", item.getHandlerId());
         map.put("assignedName", item.getHandlerRole());
         map.put("slaDueAt", dueAt);

@@ -40,6 +40,9 @@ class DeliveryAssignmentServiceTest {
     @Mock
     private CustomerNotificationService customerNotificationService;
 
+    @Mock
+    private DeliveryTaskService deliveryTaskService;
+
     private DeliveryAssignmentService service;
 
     @BeforeEach
@@ -49,7 +52,8 @@ class DeliveryAssignmentServiceTest {
                 courierRepository,
                 orderService,
                 realtimeService,
-                customerNotificationService
+                customerNotificationService,
+                deliveryTaskService
         );
     }
 
@@ -58,7 +62,7 @@ class DeliveryAssignmentServiceTest {
         Order order = order("ORDER-1", "rest_2", OrderStatus.PREPARING);
         RestaurantCourier courier = courier("COURIER-1", "rest_2");
         when(orderService.findById("ORDER-1")).thenReturn(Optional.of(order));
-        when(courierRepository.findById("COURIER-1")).thenReturn(Optional.of(courier));
+        when(courierRepository.findByIdForUpdate("COURIER-1")).thenReturn(Optional.of(courier));
 
         IllegalStateException error = assertThrows(
                 IllegalStateException.class,
@@ -69,26 +73,30 @@ class DeliveryAssignmentServiceTest {
     }
 
     @Test
-    void courierMustBelongToOrderRestaurant() {
+    void adminMayAssignGlobalCourierToAnyRestaurant() {
         Order order = order("ORDER-1", "rest_2", OrderStatus.READY);
         RestaurantCourier courier = courier("COURIER-1", "restaurant_2");
+        DeliveryAssignment task = waitingTask("DELIVERY-1", order);
         when(orderService.findById("ORDER-1")).thenReturn(Optional.of(order));
-        when(courierRepository.findById("COURIER-1")).thenReturn(Optional.of(courier));
+        when(courierRepository.findByIdForUpdate("COURIER-1")).thenReturn(Optional.of(courier));
+        when(deliveryTaskService.ensureWaitingTask(order)).thenReturn(task);
+        when(assignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> service.assignDelivery("ORDER-1", "COURIER-1", null, null)
-        );
+        DeliveryAssignment assignment = service.assignDelivery("ORDER-1", "COURIER-1", null, null);
+
+        assertEquals("COURIER-1", assignment.getCourierId());
+        assertEquals(DeliveryStatus.ASSIGNED, assignment.getStatus());
     }
 
     @Test
     void legacyRestaurantAliasCanUseCourierFromCanonicalRestaurant() {
         Order order = order("ORDER-1", "sweetdreams", OrderStatus.READY);
         RestaurantCourier courier = courier("COURIER-1", "rest_2");
+        DeliveryAssignment task = waitingTask("DELIVERY-1", order);
         when(orderService.findById("ORDER-1")).thenReturn(Optional.of(order));
-        when(courierRepository.findById("COURIER-1")).thenReturn(Optional.of(courier));
-        when(assignmentRepository.findFirstByOrderIdOrderByAssignedAtDesc("ORDER-1"))
-                .thenReturn(Optional.empty());
+        when(courierRepository.findByIdForUpdate("COURIER-1")).thenReturn(Optional.of(courier));
+        when(deliveryTaskService.ensureWaitingTask(order)).thenReturn(task);
         when(assignmentRepository.save(any(DeliveryAssignment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -109,12 +117,12 @@ class DeliveryAssignmentServiceTest {
         when(assignmentRepository.findById("DELIVERY-1")).thenReturn(Optional.of(assignment));
         stubAssignmentSave();
 
-        DeliveryAssignment updated = service.startDelivery("DELIVERY-1");
+        DeliveryAssignment updated = service.startDelivery("DELIVERY-1", "ADMIN-1");
 
         assertEquals(DeliveryStatus.DELIVERING, updated.getStatus());
         verify(orderService).updateStatus(
-                "ORDER-1", OrderStatus.DELIVERING, "rest_2",
-                "RESTAURANT", "DELIVERY_PROCESS", "Nhân viên giao hàng bắt đầu giao"
+                "ORDER-1", OrderStatus.DELIVERING, "ADMIN-1",
+                "ADMIN", "ADMIN_DISPATCH", "Quản trị viên xác nhận shipper bắt đầu giao"
         );
         verify(realtimeService).sendDeliveryUpdate(updated);
     }
@@ -125,12 +133,13 @@ class DeliveryAssignmentServiceTest {
         when(assignmentRepository.findById("DELIVERY-1")).thenReturn(Optional.of(assignment));
         stubAssignmentSave();
 
-        DeliveryAssignment updated = service.failDelivery("DELIVERY-1", "Khách không nghe máy");
+        DeliveryAssignment updated = service.failDelivery(
+                "DELIVERY-1", "Khách không nghe máy", "ADMIN-1");
 
-        assertEquals(DeliveryStatus.FAILED, updated.getStatus());
+        assertEquals(DeliveryStatus.WAITING, updated.getStatus());
         verify(orderService).updateStatus(
-                "ORDER-1", OrderStatus.READY, "rest_2",
-                "RESTAURANT", "DELIVERY_FAILED", "Khách không nghe máy"
+                "ORDER-1", OrderStatus.READY, "ADMIN-1",
+                "ADMIN", "DELIVERY_FAILED", "Khách không nghe máy"
         );
     }
 
@@ -243,6 +252,15 @@ class DeliveryAssignmentServiceTest {
         assignment.setRestaurantId("rest_2");
         assignment.setCourierId("COURIER-1");
         assignment.setStatus(status);
+        return assignment;
+    }
+
+    private DeliveryAssignment waitingTask(String id, Order order) {
+        DeliveryAssignment assignment = new DeliveryAssignment();
+        assignment.setId(id);
+        assignment.setOrderId(order.getId());
+        assignment.setRestaurantId(RestaurantIdentityPolicy.canonicalize(order.getRestaurantId()));
+        assignment.setStatus(DeliveryStatus.WAITING);
         return assignment;
     }
 

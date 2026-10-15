@@ -1,12 +1,15 @@
 package com.foodfast.dto;
 
 import com.foodfast.entity.VoucherDiscountType;
+import com.foodfast.entity.VoucherScope;
 
 import java.time.Instant;
 
 public record AvailableVoucherResponse(
         String code,
         String name,
+        VoucherScope scope,
+        String restaurantId,
         VoucherDiscountType discountType,
         int discountValue,
         int minOrderAmount,

@@ -121,7 +121,7 @@ const SupportTicketInbox: React.FC<Props> = ({ target, restaurantId }) => {
           </h2>
           <Meta>
             Đây là các câu hỏi hoặc sự cố mà trợ lý AI không tự giải quyết và đã chuyển cho
-            {target === 'RESTAURANT' ? ' nhà hàng' : ' quản trị viên'}. Khiếu nại và hoàn tiền được xử lý ở mục riêng bên dưới.
+            {target === 'RESTAURANT' ? ' nhà hàng' : ' quản trị viên'}. Báo cáo sự cố đơn hàng được xử lý ở mục riêng bên dưới.
           </Meta>
         </div>
         <RefreshButton onClick={loadTickets}>Làm mới</RefreshButton>

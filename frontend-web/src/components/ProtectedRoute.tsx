@@ -84,7 +84,7 @@ export default function ProtectedRoute({
       }}>
         Phát hiện dữ liệu xác thực không nhất quán. Vui lòng đăng nhập lại.
         <div style={{ marginTop: "20px" }}>
-          <a href="/login" style={{ color: "#FF6600", textDecoration: "none" }}>
+          <a href={redirectTo} style={{ color: "#FF6600", textDecoration: "none" }}>
             Đăng nhập lại
           </a>
         </div>
@@ -107,8 +107,8 @@ export default function ProtectedRoute({
         }}>
           Bạn không có quyền truy cập trang này.
           <div style={{ marginTop: "20px" }}>
-            <a href="/" style={{ color: "#FF6600", textDecoration: "none" }}>
-              Quay về trang chủ
+            <a href={redirectTo} style={{ color: "#FF6600", textDecoration: "none" }}>
+              Đăng nhập bằng tài khoản phù hợp
             </a>
           </div>
         </div>

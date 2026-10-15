@@ -13,11 +13,14 @@ import jakarta.persistence.Version;
 import java.util.UUID;
 
 /**
- * Connects one order to one restaurant courier and enforces delivery state
- * transitions independently from the order preparation lifecycle.
+ * One delivery task per child order. The task can exist without a courier
+ * while it is waiting for an administrator to dispatch it.
  */
 @Entity
-@Table(name = "delivery_assignments")
+@Table(name = "delivery_assignments", uniqueConstraints = {
+        @jakarta.persistence.UniqueConstraint(
+                name = "uk_delivery_assignment_order", columnNames = "order_id")
+})
 public class DeliveryAssignment {
 
     @Id
@@ -30,12 +33,12 @@ public class DeliveryAssignment {
     @Column(name = "restaurant_id", length = 50, nullable = false)
     private String restaurantId;
 
-    @Column(name = "courier_id", length = 50, nullable = false)
+    @Column(name = "courier_id", length = 50)
     private String courierId;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 24, nullable = false)
-    private DeliveryStatus status = DeliveryStatus.ASSIGNED;
+    private DeliveryStatus status = DeliveryStatus.WAITING;
 
     @Column(name = "estimated_delivery_at")
     private Long estimatedDeliveryAt;
@@ -96,6 +99,32 @@ public class DeliveryAssignment {
         updatedAt = startedAt;
     }
 
+    public void assignTo(String courierId, Long estimate, String note) {
+        if (status != DeliveryStatus.WAITING && status != DeliveryStatus.ASSIGNED) {
+            throw new IllegalStateException("Chỉ nhiệm vụ đang chờ hoặc đã phân công mới có thể đổi shipper");
+        }
+        if (courierId == null || courierId.isBlank()) {
+            throw new IllegalArgumentException("Vui lòng chọn shipper");
+        }
+        this.courierId = courierId.trim();
+        this.estimatedDeliveryAt = estimate;
+        this.deliveryNote = note;
+        this.status = DeliveryStatus.ASSIGNED;
+        this.assignedAt = System.currentTimeMillis();
+        this.updatedAt = assignedAt;
+    }
+
+    public void reopenWaiting() {
+        if (status != DeliveryStatus.FAILED && status != DeliveryStatus.CANCELLED) return;
+        status = DeliveryStatus.WAITING;
+        courierId = null;
+        estimatedDeliveryAt = null;
+        deliveryNote = null;
+        startedAt = null;
+        cancelledAt = null;
+        updatedAt = System.currentTimeMillis();
+    }
+
     public void complete(DeliveryCompletionSource source, String note) {
         requireStatus(DeliveryStatus.DELIVERING, "Chỉ đơn đang giao mới có thể hoàn thành");
         if (source == null) {
@@ -126,7 +155,9 @@ public class DeliveryAssignment {
     }
 
     public void cancel() {
-        requireStatus(DeliveryStatus.ASSIGNED, "Chỉ phân công chưa bắt đầu mới có thể hủy");
+        if (status != DeliveryStatus.WAITING && status != DeliveryStatus.ASSIGNED) {
+            throw new IllegalStateException("Chỉ nhiệm vụ chưa bắt đầu mới có thể hủy");
+        }
         status = DeliveryStatus.CANCELLED;
         cancelledAt = System.currentTimeMillis();
         updatedAt = cancelledAt;

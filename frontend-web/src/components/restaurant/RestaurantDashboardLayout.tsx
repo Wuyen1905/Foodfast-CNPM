@@ -156,13 +156,6 @@ const RestaurantDashboardLayout: React.FC<RestaurantDashboardLayoutProps> = ({
         >
           🎫 Hỗ trợ & khiếu nại
         </TabButton>
-        <TabButton
-          $active={activeTab === 'couriers'}
-          $primary={theme.primary}
-          onClick={() => setActiveTab('couriers')}
-        >
-          🛵 Nhân viên giao hàng
-        </TabButton>
       </TabContainer>
 
       {children(activeTab)}

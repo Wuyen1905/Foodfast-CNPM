@@ -3,9 +3,11 @@ package com.foodfast.service;
 import com.foodfast.dto.VNPayIpnResponse;
 import com.foodfast.dto.VNPayPaymentResult;
 import com.foodfast.entity.Order;
+import com.foodfast.entity.OrderGroup;
 import com.foodfast.entity.OrderStatus;
 import com.foodfast.event.OrderEventPublisher;
 import com.foodfast.repository.OrderRepository;
+import com.foodfast.repository.OrderGroupRepository;
 import com.foodfast.exception.ForbiddenOperationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
@@ -34,6 +37,7 @@ public class VNPayPaymentService {
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(VIETNAM_ZONE);
 
     private final OrderRepository orderRepository;
+    private final OrderGroupRepository orderGroupRepository;
     private final OrderEventPublisher orderEventPublisher;
     private final NotificationService notificationService;
     private final CustomerNotificationService customerNotificationService;
@@ -46,6 +50,7 @@ public class VNPayPaymentService {
 
     public VNPayPaymentService(
             OrderRepository orderRepository,
+            OrderGroupRepository orderGroupRepository,
             OrderEventPublisher orderEventPublisher,
             NotificationService notificationService,
             CustomerNotificationService customerNotificationService,
@@ -57,6 +62,7 @@ public class VNPayPaymentService {
             @Value("${vnpay.expireMinutes:15}") int expireMinutes
     ) {
         this.orderRepository = orderRepository;
+        this.orderGroupRepository = orderGroupRepository;
         this.orderEventPublisher = orderEventPublisher;
         this.notificationService = notificationService;
         this.customerNotificationService = customerNotificationService;
@@ -170,13 +176,74 @@ public class VNPayPaymentService {
     }
 
     @Transactional
+    public String createGroupPaymentUrl(
+            String groupId,
+            String rawIdempotencyKey,
+            HttpServletRequest request,
+            String authenticatedCustomerId
+    ) {
+        requireAvailable();
+        String idempotencyKey = normalizeIdempotencyKey(rawIdempotencyKey);
+        OrderGroup group = orderGroupRepository.findByIdForUpdate(groupId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy nhóm đặt hàng: " + groupId));
+        if (!"vnpay".equalsIgnoreCase(valueOrEmpty(group.getPaymentMethod()))) {
+            throw new IllegalArgumentException("Nhóm đặt hàng không sử dụng phương thức VNPay");
+        }
+        if (authenticatedCustomerId != null && !authenticatedCustomerId.equals(group.getUserId())) {
+            throw new ForbiddenOperationException("Bạn không được thanh toán nhóm đặt hàng này");
+        }
+        if (PaymentStatusPolicy.PAID.equals(PaymentStatusPolicy.normalize(group.getPaymentStatus()))) {
+            throw new IllegalStateException("Nhóm đặt hàng đã được thanh toán");
+        }
+        if (!isRetryable(group.getPaymentStatus())) {
+            throw new IllegalStateException("Trạng thái thanh toán hiện tại không cho phép tạo giao dịch mới");
+        }
+        if (group.getPayableAmount() <= 0) {
+            throw new IllegalStateException("Không còn đơn con nào cần thanh toán");
+        }
+
+        Instant now = Instant.now();
+        boolean activeRequest = group.getPaymentRequestUrl() != null
+                && !group.getPaymentRequestUrl().isBlank()
+                && group.getPaymentRequestExpiresAt() != null
+                && now.isBefore(group.getPaymentRequestExpiresAt());
+        if (activeRequest) return group.getPaymentRequestUrl();
+
+        String transactionReference = createGroupTransactionReference();
+        Map<String, String> params = paymentParameters(
+                transactionReference,
+                group.getPayableAmount(),
+                "Thanh toan nhom don " + group.getId(),
+                request,
+                now
+        );
+        String canonicalData = canonicalData(params);
+        String paymentUrl = payUrl + "?" + canonicalData
+                + "&vnp_SecureHash=" + hmacSHA512(hashSecret, canonicalData);
+        group.setPaymentSessionId(transactionReference);
+        group.setPaymentStatus(PaymentStatusPolicy.PENDING);
+        group.setVnpayTransactionId(null);
+        group.setPaymentRequestKey(idempotencyKey);
+        group.setPaymentRequestUrl(paymentUrl);
+        group.setPaymentRequestExpiresAt(now.plusSeconds(expireMinutes * 60L));
+        orderGroupRepository.saveAndFlush(group);
+        return paymentUrl;
+    }
+
+    @Transactional
     public VNPayPaymentResult handleReturn(Map<String, String> params) {
+        String reference = valueOrEmpty(params.get("vnp_TxnRef"));
+        if (orderGroupRepository.findByPaymentSessionId(reference).isPresent()) {
+            return inspectGroupReturn(params);
+        }
         return inspectReturn(params);
     }
 
     @Transactional
     public VNPayIpnResponse handleIpn(Map<String, String> params) {
-        CallbackOutcome outcome = processIpn(params);
+        String reference = valueOrEmpty(params.get("vnp_TxnRef"));
+        CallbackOutcome outcome = orderGroupRepository.findByPaymentSessionId(reference).isPresent()
+                ? processGroupIpn(params) : processIpn(params);
         return new VNPayIpnResponse(outcome.ipnCode(), outcome.ipnMessage());
     }
 
@@ -208,10 +275,34 @@ public class VNPayPaymentService {
         );
     }
 
+    @Transactional
+    public VNPayPaymentResult reconcileGroup(String groupId) {
+        OrderGroup group = orderGroupRepository.findByIdForUpdate(groupId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy nhóm đặt hàng: " + groupId));
+        if (PaymentStatusPolicy.PENDING.equals(PaymentStatusPolicy.normalize(group.getPaymentStatus()))
+                && group.getPaymentRequestExpiresAt() != null
+                && !Instant.now().isBefore(group.getPaymentRequestExpiresAt())) {
+            group.setPaymentStatus(PaymentStatusPolicy.EXPIRED);
+            group.setPaymentRequestUrl(null);
+            group.setPaymentRequestKey(null);
+            orderGroupRepository.save(group);
+        }
+        boolean paid = PaymentStatusPolicy.PAID.equals(PaymentStatusPolicy.normalize(group.getPaymentStatus()));
+        return groupResult(group, paid, null, paid
+                ? "Thanh toán nhóm đã được IPN của VNPay xác nhận."
+                : paymentStatusMessage(group.getPaymentStatus()));
+    }
+
     @Transactional(readOnly = true)
     public Order requireOrder(String orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng: " + orderId));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderGroup requireGroup(String groupId) {
+        return orderGroupRepository.findById(groupId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy nhóm đặt hàng: " + groupId));
     }
 
     public boolean verifySignature(Map<String, String> params) {
@@ -329,6 +420,137 @@ public class VNPayPaymentService {
                 "00", "Đã ghi nhận kết quả giao dịch");
     }
 
+    private VNPayPaymentResult inspectGroupReturn(Map<String, String> params) {
+        GroupCallbackValidation validation = validateGroupCallback(params, false);
+        if (validation.failure() != null) return validation.failure().result();
+        OrderGroup group = validation.group();
+        boolean paid = PaymentStatusPolicy.PAID.equals(
+                PaymentStatusPolicy.normalize(group.getPaymentStatus()));
+        String message = paid
+                ? "Thanh toán nhóm đã được IPN của VNPay xác nhận."
+                : isGatewaySuccess(params)
+                    ? "VNPay đã trả kết quả thành công. FoodFast đang chờ IPN xác nhận chính thức."
+                    : "Giao dịch không thành công hoặc đã bị hủy. Bạn có thể tạo phiên thanh toán mới.";
+        return groupResult(group, paid, params.get("vnp_ResponseCode"), message);
+    }
+
+    private CallbackOutcome processGroupIpn(Map<String, String> params) {
+        GroupCallbackValidation validation = validateGroupCallback(params, true);
+        if (validation.failure() != null) return validation.failure();
+        OrderGroup group = validation.group();
+        String transactionId = blankToNull(params.get("vnp_TransactionNo"));
+        String status = PaymentStatusPolicy.normalize(group.getPaymentStatus());
+        if (PaymentStatusPolicy.PAID.equals(status)) {
+            return new CallbackOutcome(
+                    groupResult(group, true, params.get("vnp_ResponseCode"),
+                            "Nhóm đặt hàng đã được xác nhận thanh toán."),
+                    "02", "Nhóm đặt hàng đã được xác nhận"
+            );
+        }
+        if (!PaymentStatusPolicy.PENDING.equals(status)
+                && !PaymentStatusPolicy.EXPIRED.equals(status)
+                && !PaymentStatusPolicy.FAILED.equals(status)) {
+            return failure(true, group.getId(), group.getPaymentStatus(),
+                    (long) group.getPayableAmount(), params.get("vnp_ResponseCode"),
+                    "Nhóm đặt hàng đã được xử lý.", "02", "Giao dịch đã được xử lý");
+        }
+
+        if (isGatewaySuccess(params)) {
+            if (transactionId == null) {
+                return failure(true, group.getId(), group.getPaymentStatus(),
+                        (long) group.getPayableAmount(), params.get("vnp_ResponseCode"),
+                        "Thiếu mã giao dịch VNPay.", "99", "Thiếu mã giao dịch");
+            }
+            OrderGroup owner = orderGroupRepository.findByVnpayTransactionId(transactionId).orElse(null);
+            if (owner != null && !owner.getId().equals(group.getId())) {
+                return failure(true, group.getId(), group.getPaymentStatus(),
+                        (long) group.getPayableAmount(), params.get("vnp_ResponseCode"),
+                        "Mã giao dịch đã được dùng cho nhóm khác.", "02", "Giao dịch đã được xử lý");
+            }
+
+            long paidAt = System.currentTimeMillis();
+            group.setPaymentStatus(PaymentStatusPolicy.PAID);
+            group.setPaidAt(group.getPaidAt() == null ? paidAt : group.getPaidAt());
+            group.setVnpayTransactionId(transactionId);
+            group.setPaymentRequestUrl(null);
+            group.setPaymentRequestKey(null);
+            List<Order> children = orderRepository
+                    .findByOrderGroupIdOrderByGroupPositionAsc(group.getId());
+            for (Order child : children) {
+                if (child.getStatusEnum() == OrderStatus.CANCELLED) continue;
+                child.setPaymentStatus(PaymentStatusPolicy.PAID);
+                child.setPaidAt(child.getPaidAt() == null ? paidAt : child.getPaidAt());
+                child.setPaymentAllocatedAmount(child.getTotal());
+                Order saved = orderRepository.save(child);
+                orderEventPublisher.publishOrderUpdate(saved);
+                customerNotificationService.paymentSucceeded(saved);
+                try {
+                    notificationService.createNotification(saved);
+                } catch (RuntimeException exception) {
+                    System.err.println("[VNPay] Không thể tạo thông báo nhà hàng: " + exception.getMessage());
+                }
+            }
+            orderGroupRepository.save(group);
+            return new CallbackOutcome(
+                    groupResult(group, true, params.get("vnp_ResponseCode"),
+                            "Thanh toán VNPay cho toàn bộ nhóm đơn thành công."),
+                    "00", "Xác nhận thành công"
+            );
+        }
+
+        group.setPaymentStatus(PaymentStatusPolicy.FAILED);
+        group.setVnpayTransactionId(transactionId);
+        group.setPaymentRequestUrl(null);
+        group.setPaymentRequestKey(null);
+        orderGroupRepository.save(group);
+        orderRepository.findByOrderGroupIdOrderByGroupPositionAsc(group.getId()).stream()
+                .filter(order -> order.getStatusEnum() != OrderStatus.CANCELLED)
+                .forEach(order -> {
+                    order.setPaymentStatus(PaymentStatusPolicy.FAILED);
+                    orderRepository.save(order);
+                    customerNotificationService.paymentFailed(order);
+                });
+        return failure(true, group.getId(), PaymentStatusPolicy.FAILED,
+                (long) group.getPayableAmount(), params.get("vnp_ResponseCode"),
+                "Giao dịch không thành công hoặc đã bị hủy.",
+                "00", "Đã ghi nhận kết quả giao dịch");
+    }
+
+    private GroupCallbackValidation validateGroupCallback(Map<String, String> params, boolean forUpdate) {
+        if (!isAvailable()) {
+            return invalidGroup(failure(false, null, null, null, "99", availabilityMessage(),
+                    "99", "VNPay chưa được cấu hình"));
+        }
+        if (!verifySignature(params) || !tmnCode.equals(params.get("vnp_TmnCode"))) {
+            return invalidGroup(failure(false, null, null, null, "97",
+                    "Chữ ký hoặc mã website VNPay không hợp lệ.", "97", "Chữ ký không hợp lệ"));
+        }
+        String reference = valueOrEmpty(params.get("vnp_TxnRef"));
+        OrderGroup group = forUpdate
+                ? orderGroupRepository.findByPaymentSessionIdForUpdate(reference).orElse(null)
+                : orderGroupRepository.findByPaymentSessionId(reference).orElse(null);
+        if (group == null) {
+            return invalidGroup(failure(true, null, null, null, params.get("vnp_ResponseCode"),
+                    "Không tìm thấy nhóm đặt hàng tương ứng.", "01", "Không tìm thấy nhóm đặt hàng"));
+        }
+        long callbackAmount;
+        try {
+            callbackAmount = Long.parseLong(valueOrEmpty(params.get("vnp_Amount")));
+        } catch (NumberFormatException exception) {
+            return invalidGroup(failure(true, group.getId(), group.getPaymentStatus(), null,
+                    params.get("vnp_ResponseCode"), "Số tiền VNPay trả về không hợp lệ.",
+                    "04", "Số tiền không hợp lệ"));
+        }
+        long expected = Math.multiplyExact((long) group.getPayableAmount(), 100L);
+        if (callbackAmount != expected) {
+            return invalidGroup(failure(true, group.getId(), group.getPaymentStatus(),
+                    (long) group.getPayableAmount(), params.get("vnp_ResponseCode"),
+                    "Số tiền thanh toán không khớp với nhóm đặt hàng.",
+                    "04", "Số tiền không hợp lệ"));
+        }
+        return new GroupCallbackValidation(group, null);
+    }
+
     private CallbackValidation validateCallback(Map<String, String> params, boolean forUpdate) {
         if (!isAvailable()) {
             return invalid(failure(false, null, null, null, "99", availabilityMessage(), "99", "VNPay chưa được cấu hình"));
@@ -376,7 +598,11 @@ public class VNPayPaymentService {
     }
 
     private String paymentStatusMessage(Order order) {
-        String status = PaymentStatusPolicy.normalize(order.getPaymentStatus());
+        return paymentStatusMessage(order.getPaymentStatus());
+    }
+
+    private String paymentStatusMessage(String paymentStatus) {
+        String status = PaymentStatusPolicy.normalize(paymentStatus);
         return switch (status) {
             case PaymentStatusPolicy.EXPIRED -> "Phiên thanh toán đã hết hạn. Vui lòng tạo phiên mới.";
             case PaymentStatusPolicy.FAILED -> "Thanh toán chưa thành công. Bạn có thể thử lại.";
@@ -392,6 +618,24 @@ public class VNPayPaymentService {
                 PaymentStatusPolicy.PAID,
                 transactionId != null ? transactionId : order.getVnpayTransactionId(),
                 (long) order.getTotal(),
+                responseCode,
+                message
+        );
+    }
+
+    private VNPayPaymentResult groupResult(
+            OrderGroup group,
+            boolean success,
+            String responseCode,
+            String message
+    ) {
+        return new VNPayPaymentResult(
+                true,
+                success,
+                group.getId(),
+                PaymentStatusPolicy.normalize(group.getPaymentStatus()),
+                group.getVnpayTransactionId(),
+                (long) group.getPayableAmount(),
                 responseCode,
                 message
         );
@@ -457,6 +701,43 @@ public class VNPayPaymentService {
     private String createTransactionReference() {
         String randomPart = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
         return "FF" + System.currentTimeMillis() + randomPart;
+    }
+
+    private String createGroupTransactionReference() {
+        String randomPart = UUID.randomUUID().toString().replace("-", "")
+                .substring(0, 8).toUpperCase(Locale.ROOT);
+        return "FG" + System.currentTimeMillis() + randomPart;
+    }
+
+    private Map<String, String> paymentParameters(
+            String transactionReference,
+            int amount,
+            String orderInfo,
+            HttpServletRequest request,
+            Instant now
+    ) {
+        Map<String, String> params = new TreeMap<>();
+        params.put("vnp_Version", "2.1.0");
+        params.put("vnp_Command", "pay");
+        params.put("vnp_TmnCode", tmnCode);
+        params.put("vnp_Amount", String.valueOf(Math.multiplyExact((long) amount, 100L)));
+        params.put("vnp_CurrCode", "VND");
+        params.put("vnp_IpAddr", extractClientIp(request));
+        params.put("vnp_TxnRef", transactionReference);
+        params.put("vnp_OrderInfo", orderInfo);
+        params.put("vnp_OrderType", "other");
+        params.put("vnp_Locale", "vn");
+        params.put("vnp_ReturnUrl", returnUrl);
+        params.put("vnp_CreateDate", VNPAY_DATE_FORMAT.format(now));
+        params.put("vnp_ExpireDate", VNPAY_DATE_FORMAT.format(now.plusSeconds(expireMinutes * 60L)));
+        return params;
+    }
+
+    private boolean isRetryable(String paymentStatus) {
+        String status = PaymentStatusPolicy.normalize(paymentStatus);
+        return PaymentStatusPolicy.PENDING.equals(status)
+                || PaymentStatusPolicy.FAILED.equals(status)
+                || PaymentStatusPolicy.EXPIRED.equals(status);
     }
 
     private String extractClientIp(HttpServletRequest request) {
@@ -534,4 +815,9 @@ public class VNPayPaymentService {
     }
 
     private record CallbackValidation(Order order, CallbackOutcome failure) { }
+    private record GroupCallbackValidation(OrderGroup group, CallbackOutcome failure) { }
+
+    private GroupCallbackValidation invalidGroup(CallbackOutcome failure) {
+        return new GroupCallbackValidation(null, failure);
+    }
 }

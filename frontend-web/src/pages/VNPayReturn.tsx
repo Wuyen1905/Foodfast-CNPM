@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import styled from 'styled-components';
 import {
   createVNPayUrl,
+  createVNPayGroupUrl,
+  reconcileVNPayGroup,
   reconcileVNPayOrder,
   verifyVNPayReturn,
   VNPayPaymentResult,
@@ -123,7 +125,9 @@ const VNPayReturn: React.FC = () => {
             && verifiedResult.responseCode === '00') {
           for (let attempt = 0; attempt < 5 && !verifiedResult.success; attempt += 1) {
             await wait(1200);
-            verifiedResult = await reconcileVNPayOrder(orderId);
+            verifiedResult = orderId.startsWith('GROUP-')
+              ? await reconcileVNPayGroup(orderId)
+              : await reconcileVNPayOrder(orderId);
           }
         }
         setResult(verifiedResult);
@@ -155,7 +159,11 @@ const VNPayReturn: React.FC = () => {
 
   const handleContinue = async () => {
     if (result?.success) {
-      navigate(result.orderId ? `/orders/${result.orderId}` : '/orders');
+      navigate(result.orderId
+        ? (result.orderId.startsWith('GROUP-')
+          ? `/order-groups/${result.orderId}`
+          : `/orders/${result.orderId}`)
+        : '/orders');
       return;
     }
 
@@ -166,7 +174,9 @@ const VNPayReturn: React.FC = () => {
 
     setRetrying(true);
     try {
-      const paymentUrl = await createVNPayUrl(result.orderId);
+      const paymentUrl = result.orderId.startsWith('GROUP-')
+        ? await createVNPayGroupUrl(result.orderId)
+        : await createVNPayUrl(result.orderId);
       window.location.assign(paymentUrl);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Không thể tạo lại phiên thanh toán');
@@ -213,7 +223,7 @@ const VNPayReturn: React.FC = () => {
             <Message>{result.message}</Message>
             {result.orderId && (
               <Message>
-                <strong>Mã đơn hàng:</strong> {result.orderId}
+                <strong>{result.orderId.startsWith('GROUP-') ? 'Mã nhóm đơn:' : 'Mã đơn hàng:'}</strong> {result.orderId}
               </Message>
             )}
             {result.transactionId && (

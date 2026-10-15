@@ -40,7 +40,7 @@ public class Order {
     private String customerEmail;
 
     @Lob
-    @Column
+    @Column(length = Integer.MAX_VALUE)
     private String address;
 
     private String restaurant;
@@ -48,6 +48,12 @@ public class Order {
     private String restaurantId;
 
     private String userId;
+
+    @Column(name = "order_group_id", length = 60)
+    private String orderGroupId;
+
+    @Column(name = "group_position")
+    private Integer groupPosition;
 
     @Column(length = 80)
     private String paymentSessionId;
@@ -162,8 +168,30 @@ public class Order {
     @Column(name = "voucher_name", length = 120)
     private String voucherName;
 
+    /** Phạm vi ưu đãi được chụp lại tại thời điểm đặt đơn để đối soát không bị đổi theo cấu hình mới. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "voucher_scope", length = 20)
+    private VoucherScope voucherScope;
+
+    /** Phần giảm giá nhà hàng chịu; mã toàn hệ thống do FoodFast chịu nên bằng 0. */
+    @Column(name = "restaurant_discount_amount", nullable = false)
+    private int restaurantDiscountAmount;
+
     @Column(name = "partial_refund_amount")
     private int partialRefundAmount;
+
+    @Column(name = "refund_transaction_reference", length = 100)
+    private String refundTransactionReference;
+
+    @Column(name = "refund_completed_at")
+    private Long refundCompletedAt;
+
+    @Column(name = "refund_note", length = 1200)
+    private String refundNote;
+
+    /** Phần tiền của đơn con đã được phân bổ từ giao dịch thanh toán nhóm. */
+    @Column(name = "payment_allocated_amount", nullable = false)
+    private int paymentAllocatedAmount;
 
     // Database columns (stored as Instant in DB)
     @Column(nullable = false, name = "created_at")
@@ -294,6 +322,11 @@ public class Order {
     public void setUserId(String userId) {
         this.userId = userId;
     }
+
+    public String getOrderGroupId() { return orderGroupId; }
+    public void setOrderGroupId(String orderGroupId) { this.orderGroupId = orderGroupId; }
+    public Integer getGroupPosition() { return groupPosition; }
+    public void setGroupPosition(Integer groupPosition) { this.groupPosition = groupPosition; }
 
     public String getPaymentSessionId() {
         return paymentSessionId;
@@ -477,8 +510,22 @@ public class Order {
     public void setVoucherCode(String voucherCode) { this.voucherCode = voucherCode; }
     public String getVoucherName() { return voucherName; }
     public void setVoucherName(String voucherName) { this.voucherName = voucherName; }
+    public VoucherScope getVoucherScope() { return voucherScope; }
+    public void setVoucherScope(VoucherScope voucherScope) { this.voucherScope = voucherScope; }
+    public int getRestaurantDiscountAmount() { return restaurantDiscountAmount; }
+    public void setRestaurantDiscountAmount(int restaurantDiscountAmount) {
+        this.restaurantDiscountAmount = Math.max(0, restaurantDiscountAmount);
+    }
     public int getPartialRefundAmount() { return partialRefundAmount; }
     public void setPartialRefundAmount(int partialRefundAmount) { this.partialRefundAmount = Math.max(0, partialRefundAmount); }
+    public String getRefundTransactionReference() { return refundTransactionReference; }
+    public void setRefundTransactionReference(String refundTransactionReference) { this.refundTransactionReference = refundTransactionReference; }
+    public Long getRefundCompletedAt() { return refundCompletedAt; }
+    public void setRefundCompletedAt(Long refundCompletedAt) { this.refundCompletedAt = refundCompletedAt; }
+    public String getRefundNote() { return refundNote; }
+    public void setRefundNote(String refundNote) { this.refundNote = refundNote; }
+    public int getPaymentAllocatedAmount() { return paymentAllocatedAmount; }
+    public void setPaymentAllocatedAmount(int paymentAllocatedAmount) { this.paymentAllocatedAmount = Math.max(0, paymentAllocatedAmount); }
     
     // Backward compatibility getter
     public BigDecimal getTotalAmount() {

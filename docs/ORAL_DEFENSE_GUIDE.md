@@ -2,7 +2,7 @@
 
 ## Vì sao không làm cổng shipper?
 
-Mỗi nhà hàng tự điều người giao. Nếu thêm tài khoản shipper, hệ thống phải có đăng ký, đăng nhập, phân quyền, nhận hoặc từ chối đơn và bảo mật vị trí. Phạm vi đó lớn hơn giá trị cần chứng minh. Vì vậy RestaurantCourier là dữ liệu thuộc nhà hàng, còn nhân viên nhà hàng thao tác trên dashboard.
+FoodFast không xây tài khoản hay ứng dụng riêng cho shipper vì phạm vi đó đòi hỏi đăng nhập, nhận hoặc từ chối đơn và bảo mật vị trí. Thay vào đó, quản trị viên quản lý tập trung hồ sơ shipper và phân công từng nhiệm vụ giao; nhà hàng chỉ chuẩn bị món đến trạng thái sẵn sàng. Cách này vẫn thể hiện rõ trách nhiệm giao hàng mà không mở rộng đồ án thành một nền tảng logistics đầy đủ.
 
 ## Vì sao có DeliveryAssignment riêng?
 
@@ -10,7 +10,7 @@ Order thể hiện vòng đời đặt và chuẩn bị món. DeliveryAssignment
 
 ## State machine bảo vệ gì?
 
-Backend chỉ cho phép các bước liền kề. Giao diện không phải lớp bảo vệ duy nhất. API không thể chuyển Pending thẳng sang Delivered; nhà hàng chỉ xác nhận bàn giao, còn backend chỉ nhận Delivered từ khách hàng sở hữu đơn qua DeliveryAssignmentService.
+Backend chỉ cho phép các bước liền kề. Giao diện không phải lớp bảo vệ duy nhất. API không thể chuyển Pending thẳng sang Delivered; nhà hàng chỉ đánh dấu món sẵn sàng, quản trị viên phân công giao, còn khách hàng sở hữu đơn xác nhận đã nhận món.
 
 ## Vì sao thanh toán tách khỏi giao hàng?
 

@@ -3,9 +3,11 @@ package com.foodfast.service;
 import com.foodfast.dto.VNPayPaymentResult;
 import com.foodfast.dto.VNPayIpnResponse;
 import com.foodfast.entity.Order;
+import com.foodfast.entity.OrderGroup;
 import com.foodfast.entity.OrderStatus;
 import com.foodfast.event.OrderEventPublisher;
 import com.foodfast.repository.OrderRepository;
+import com.foodfast.repository.OrderGroupRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,7 @@ class VNPayPaymentServiceTest {
     private static final String HASH_SECRET = "test-secret-for-hmac-sha512";
 
     private final OrderRepository orderRepository = mock(OrderRepository.class);
+    private final OrderGroupRepository orderGroupRepository = mock(OrderGroupRepository.class);
     private final OrderEventPublisher orderEventPublisher = mock(OrderEventPublisher.class);
     private final NotificationService notificationService = mock(NotificationService.class);
     private final CustomerNotificationService customerNotificationService = mock(CustomerNotificationService.class);
@@ -47,6 +50,7 @@ class VNPayPaymentServiceTest {
     void setUp() {
         service = new VNPayPaymentService(
                 orderRepository,
+                orderGroupRepository,
                 orderEventPublisher,
                 notificationService,
                 customerNotificationService,
@@ -129,6 +133,44 @@ class VNPayPaymentServiceTest {
         assertThat(order.getVnpayTransactionId()).isEqualTo("999999");
         verify(orderEventPublisher).publishOrderUpdate(order);
         verify(notificationService).createNotification(order);
+    }
+
+    @Test
+    void validGroupIpnPaysOnceAndAllocatesExactAmountToEveryActiveChild() {
+        OrderGroup group = new OrderGroup();
+        group.setId("GROUP-TEST-1");
+        group.setUserId("CUSTOMER-1");
+        group.setPaymentMethod("vnpay");
+        group.setPaymentStatus(PaymentStatusPolicy.PENDING);
+        group.setTotal(180_000);
+        group.setPayableAmount(180_000);
+        group.setPaymentSessionId("FGATTEMPT123");
+        Order first = pendingVNPayOrder();
+        first.setId("ORDER-CHILD-1");
+        first.setTotal(100_000);
+        Order second = pendingVNPayOrder();
+        second.setId("ORDER-CHILD-2");
+        second.setTotal(80_000);
+        when(orderGroupRepository.findByPaymentSessionId("FGATTEMPT123"))
+                .thenReturn(Optional.of(group));
+        when(orderGroupRepository.findByPaymentSessionIdForUpdate("FGATTEMPT123"))
+                .thenReturn(Optional.of(group));
+        when(orderRepository.findByOrderGroupIdOrderByGroupPositionAsc(group.getId()))
+                .thenReturn(List.of(first, second));
+        when(orderRepository.save(first)).thenReturn(first);
+        when(orderRepository.save(second)).thenReturn(second);
+
+        VNPayIpnResponse result = service.handleIpn(
+                signedCallback("18000000", "00", "00", "FGATTEMPT123")
+        );
+
+        assertThat(result.RspCode()).isEqualTo("00");
+        assertThat(group.getPaymentStatus()).isEqualTo(PaymentStatusPolicy.PAID);
+        assertThat(group.getVnpayTransactionId()).isEqualTo("999999");
+        assertThat(first.getPaymentAllocatedAmount()).isEqualTo(100_000);
+        assertThat(second.getPaymentAllocatedAmount()).isEqualTo(80_000);
+        assertThat(first.getPaymentStatus()).isEqualTo(PaymentStatusPolicy.PAID);
+        assertThat(second.getPaymentStatus()).isEqualTo(PaymentStatusPolicy.PAID);
     }
 
     @Test
@@ -253,13 +295,22 @@ class VNPayPaymentServiceTest {
     }
 
     private Map<String, String> signedCallback(String amount, String responseCode, String transactionStatus) {
+        return signedCallback(amount, responseCode, transactionStatus, "FFATTEMPT123");
+    }
+
+    private Map<String, String> signedCallback(
+            String amount,
+            String responseCode,
+            String transactionStatus,
+            String reference
+    ) {
         Map<String, String> params = new TreeMap<>();
         params.put("vnp_Amount", amount);
         params.put("vnp_ResponseCode", responseCode);
         params.put("vnp_TmnCode", TMN_CODE);
         params.put("vnp_TransactionNo", "999999");
         params.put("vnp_TransactionStatus", transactionStatus);
-        params.put("vnp_TxnRef", "FFATTEMPT123");
+        params.put("vnp_TxnRef", reference);
         params.put("vnp_SecureHash", hmac(canonical(params)));
         return params;
     }

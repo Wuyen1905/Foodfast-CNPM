@@ -1,6 +1,5 @@
 package com.foodfast.controller;
 
-import com.foodfast.dto.CompleteRefundRequest;
 import com.foodfast.dto.ComplaintResponse;
 import com.foodfast.dto.CreateComplaintRequest;
 import com.foodfast.dto.ReviewComplaintRequest;
@@ -96,15 +95,4 @@ public class ComplaintController {
         );
     }
 
-    @PatchMapping("/{complaintId}/refund/complete")
-    public ComplaintResponse completeRefund(
-            @PathVariable String complaintId,
-            @RequestBody @Valid CompleteRefundRequest request
-    ) {
-        return complaintService.completeRefund(
-                complaintId,
-                currentUserService.requireUser().getId(),
-                request
-        );
-    }
 }

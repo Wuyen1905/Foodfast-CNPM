@@ -5,7 +5,7 @@ export type { DeliveryStatus } from '@/types/status';
 
 export interface RestaurantCourier {
   id: string;
-  restaurantId: string;
+  restaurantId?: string | null;
   name: string;
   phone: string;
   vehicleType?: string;
@@ -19,8 +19,8 @@ export interface DeliveryDetails {
   id: string;
   orderId: string;
   restaurantId: string;
-  courierId: string;
-  courierName: string;
+  courierId?: string;
+  courierName?: string;
   vehicleType?: string;
   licensePlate?: string;
   status: DeliveryStatus;
@@ -38,6 +38,7 @@ export interface DeliveryDetails {
 }
 
 export interface CreateCourierInput {
+  restaurantId?: string;
   name: string;
   phone: string;
   vehicleType?: string;
@@ -52,20 +53,25 @@ export interface AssignDeliveryInput {
 }
 
 export async function listCouriers(
-  restaurantId: string,
-  activeOnly = false,
+  activeOnlyOrLegacyRestaurant: boolean | string = false,
+  legacyActiveOnly = false,
 ): Promise<RestaurantCourier[]> {
-  const response = await apiClient.get(`/restaurants/${restaurantId}/couriers`, {
+  const activeOnly = typeof activeOnlyOrLegacyRestaurant === 'boolean'
+    ? activeOnlyOrLegacyRestaurant : legacyActiveOnly;
+  const response = await apiClient.get('/admin/couriers', {
     params: { activeOnly },
   });
   return response.data;
 }
 
 export async function createCourier(
-  restaurantId: string,
-  input: CreateCourierInput,
+  inputOrLegacyRestaurant: CreateCourierInput | string,
+  legacyInput?: CreateCourierInput,
 ): Promise<RestaurantCourier> {
-  const response = await apiClient.post(`/restaurants/${restaurantId}/couriers`, input);
+  const input = typeof inputOrLegacyRestaurant === 'string'
+    ? { ...legacyInput, restaurantId: inputOrLegacyRestaurant } as CreateCourierInput
+    : inputOrLegacyRestaurant;
+  const response = await apiClient.post('/admin/couriers', input);
   return response.data;
 }
 
@@ -73,16 +79,16 @@ export async function updateCourier(
   courierId: string,
   input: Partial<CreateCourierInput> & { active?: boolean },
 ): Promise<RestaurantCourier> {
-  const response = await apiClient.patch(`/couriers/${courierId}`, input);
+  const response = await apiClient.patch(`/admin/couriers/${courierId}`, input);
   return response.data;
 }
 
 export async function deactivateCourier(courierId: string): Promise<void> {
-  await apiClient.delete(`/couriers/${courierId}`);
+  await apiClient.delete(`/admin/couriers/${courierId}`);
 }
 
 export async function assignDelivery(input: AssignDeliveryInput): Promise<DeliveryDetails> {
-  const response = await apiClient.post('/deliveries/assign', input);
+  const response = await apiClient.post('/admin/deliveries/assign', input);
   return response.data;
 }
 
@@ -102,7 +108,7 @@ export async function listRestaurantDeliveries(restaurantId: string): Promise<De
 }
 
 export async function startDelivery(assignmentId: string): Promise<DeliveryDetails> {
-  const response = await apiClient.post(`/deliveries/${assignmentId}/start`);
+  const response = await apiClient.post(`/admin/deliveries/${assignmentId}/start`);
   return response.data;
 }
 
@@ -126,11 +132,30 @@ export async function completeDeliveryByRestaurantOverride(
 }
 
 export async function failDelivery(assignmentId: string, reason: string): Promise<DeliveryDetails> {
-  const response = await apiClient.post(`/deliveries/${assignmentId}/fail`, { reason });
+  const response = await apiClient.post(`/admin/deliveries/${assignmentId}/fail`, { reason });
   return response.data;
 }
 
 export async function cancelDelivery(assignmentId: string): Promise<DeliveryDetails> {
-  const response = await apiClient.post(`/deliveries/${assignmentId}/cancel`);
+  const response = await apiClient.post(`/admin/deliveries/${assignmentId}/cancel`);
+  return response.data;
+}
+
+export interface AdminDeliveryQueueItem {
+  orderId: string;
+  orderGroupId?: string;
+  groupPosition?: number;
+  restaurantId: string;
+  restaurantName: string;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  orderTotal: number;
+  orderStatus: string;
+  delivery: DeliveryDetails;
+}
+
+export async function listAdminDeliveryQueue(): Promise<AdminDeliveryQueueItem[]> {
+  const response = await apiClient.get('/admin/deliveries/queue');
   return response.data;
 }

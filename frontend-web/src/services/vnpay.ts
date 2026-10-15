@@ -73,6 +73,21 @@ export async function createVNPayUrl(orderId: string, idempotencyKey?: string): 
   return data.url;
 }
 
+export async function createVNPayGroupUrl(groupId: string, idempotencyKey?: string): Promise<string> {
+  const key = idempotencyKey || `vnpay-${groupId}-${crypto.randomUUID()}`;
+  const response = await fetch(
+    `/api/payment/vnpay/groups/${encodeURIComponent(groupId)}/create`,
+    {
+      method: 'POST',
+      headers: { 'Idempotency-Key': key, ...authHeaders() },
+    },
+  );
+  const data = await readJson(response);
+  if (data.enabled === false) throw paymentError(data.message || 'VNPay chưa khả dụng', true);
+  if (!response.ok) throw paymentError(data.message || 'Không thể tạo phiên thanh toán nhóm');
+  return data.url;
+}
+
 export async function reconcileVNPayOrder(orderId: string): Promise<VNPayPaymentResult> {
   const response = await fetch(`/api/payment/vnpay/orders/${encodeURIComponent(orderId)}/status`, {
     headers: { Accept: 'application/json', ...authHeaders() },
@@ -81,6 +96,16 @@ export async function reconcileVNPayOrder(orderId: string): Promise<VNPayPayment
   if (!response.ok) {
     throw paymentError(data.message || 'Không thể kiểm tra trạng thái thanh toán');
   }
+  return data as VNPayPaymentResult;
+}
+
+export async function reconcileVNPayGroup(groupId: string): Promise<VNPayPaymentResult> {
+  const response = await fetch(
+    `/api/payment/vnpay/groups/${encodeURIComponent(groupId)}/status`,
+    { headers: { Accept: 'application/json', ...authHeaders() } },
+  );
+  const data = await readJson(response);
+  if (!response.ok) throw paymentError(data.message || 'Không thể kiểm tra thanh toán nhóm');
   return data as VNPayPaymentResult;
 }
 

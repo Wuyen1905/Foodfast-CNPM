@@ -20,6 +20,9 @@ public class Voucher {
     @Column(name = "restaurant_id", length = 60)
     private String restaurantId;
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private VoucherScope scope = VoucherScope.RESTAURANT;
+    @Enumerated(EnumType.STRING)
     @Column(name = "discount_type", nullable = false, length = 20)
     private VoucherDiscountType discountType;
     @Column(name = "discount_value", nullable = false)
@@ -45,6 +48,8 @@ public class Voucher {
     public void setName(String name) { this.name = name; }
     public String getRestaurantId() { return restaurantId; }
     public void setRestaurantId(String restaurantId) { this.restaurantId = restaurantId; }
+    public VoucherScope getScope() { return scope; }
+    public void setScope(VoucherScope scope) { this.scope = scope == null ? VoucherScope.RESTAURANT : scope; }
     public VoucherDiscountType getDiscountType() { return discountType; }
     public void setDiscountType(VoucherDiscountType discountType) { this.discountType = discountType; }
     public int getDiscountValue() { return discountValue; }

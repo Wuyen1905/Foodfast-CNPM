@@ -31,7 +31,13 @@ public class User {
     private String phone;
 
     @Column(nullable = false, length = 20)
-    private String role; // 'admin', 'customer', 'restaurant'
+    private String role; // 'admin', 'manager', 'customer', 'restaurant'
+
+    @Column(name = "account_status", nullable = false, length = 20)
+    private String accountStatus = "active";
+
+    @Column(name = "manager_permissions", length = 500)
+    private String managerPermissions;
 
     @Column(name = "restaurant_id", length = 50)
     private String restaurantId;
@@ -110,6 +116,26 @@ public class User {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public String getAccountStatus() {
+        return accountStatus;
+    }
+
+    public void setAccountStatus(String accountStatus) {
+        this.accountStatus = accountStatus;
+    }
+
+    public boolean isAccountActive() {
+        return accountStatus == null || !"suspended".equalsIgnoreCase(accountStatus);
+    }
+
+    public String getManagerPermissions() {
+        return managerPermissions;
+    }
+
+    public void setManagerPermissions(String managerPermissions) {
+        this.managerPermissions = managerPermissions;
     }
 
     public String getRestaurantId() {

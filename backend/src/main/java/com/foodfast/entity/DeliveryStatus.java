@@ -1,9 +1,10 @@
 package com.foodfast.entity;
 
 /**
- * Lifecycle of one restaurant-managed delivery assignment.
+ * Lifecycle of one administrator-managed delivery task.
  */
 public enum DeliveryStatus {
+    WAITING,
     ASSIGNED,
     DELIVERING,
     DELIVERED,

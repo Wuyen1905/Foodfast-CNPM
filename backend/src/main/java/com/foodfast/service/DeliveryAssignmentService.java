@@ -25,19 +25,22 @@ public class DeliveryAssignmentService {
     private final OrderService orderService;
     private final RealtimeService realtimeService;
     private final CustomerNotificationService customerNotificationService;
+    private final DeliveryTaskService deliveryTaskService;
 
     public DeliveryAssignmentService(
             DeliveryAssignmentRepository assignmentRepository,
             RestaurantCourierRepository courierRepository,
             OrderService orderService,
             RealtimeService realtimeService,
-            CustomerNotificationService customerNotificationService
+            CustomerNotificationService customerNotificationService,
+            DeliveryTaskService deliveryTaskService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.courierRepository = courierRepository;
         this.orderService = orderService;
         this.realtimeService = realtimeService;
         this.customerNotificationService = customerNotificationService;
+        this.deliveryTaskService = deliveryTaskService;
     }
 
     @Transactional
@@ -49,7 +52,8 @@ public class DeliveryAssignmentService {
     ) {
         Order order = orderService.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng: " + orderId));
-        RestaurantCourier courier = courierRepository.findById(courierId)
+        // Khóa hồ sơ shipper để hai yêu cầu đồng thời không thể cùng giao hai đơn.
+        RestaurantCourier courier = courierRepository.findByIdForUpdate(courierId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy nhân viên giao hàng: " + courierId));
 
         if (order.getStatusEnum() != OrderStatus.READY) {
@@ -58,17 +62,17 @@ public class DeliveryAssignmentService {
         if (!courier.isActive()) {
             throw new IllegalStateException("Nhân viên giao hàng đã ngừng hoạt động");
         }
-        if (!RestaurantIdentityPolicy.refersToSameRestaurant(
-                order.getRestaurantId(),
-                courier.getRestaurantId()
-        )) {
-            throw new IllegalArgumentException("Nhân viên giao hàng không thuộc nhà hàng của đơn");
+        DeliveryAssignment task = deliveryTaskService.ensureWaitingTask(order);
+        if (task == null) {
+            throw new IllegalStateException("Không thể tạo nhiệm vụ giao hàng cho đơn này");
         }
-
-        Optional<DeliveryAssignment> latest = assignmentRepository
-                .findFirstByOrderIdOrderByAssignedAtDesc(orderId);
-        if (latest.isPresent() && isActive(latest.get().getStatus())) {
-            throw new IllegalStateException("Đơn hàng đã có phân công giao hàng đang hoạt động");
+        if (task.getStatus() == DeliveryStatus.DELIVERING) {
+            throw new IllegalStateException("Đơn đang giao nên không thể đổi shipper");
+        }
+        boolean courierBusy = assignmentRepository.existsByCourierIdAndStatusIn(
+                courierId, List.of(DeliveryStatus.ASSIGNED, DeliveryStatus.DELIVERING));
+        if (courierBusy && !courierId.equals(task.getCourierId())) {
+            throw new IllegalStateException("Shipper đang có một đơn hoạt động, vui lòng chọn người khác");
         }
 
         long now = System.currentTimeMillis();
@@ -76,17 +80,12 @@ public class DeliveryAssignmentService {
             throw new IllegalArgumentException("Thời gian giao dự kiến phải ở tương lai");
         }
 
-        DeliveryAssignment assignment = new DeliveryAssignment();
-        assignment.setOrderId(orderId);
-        assignment.setRestaurantId(RestaurantIdentityPolicy.canonicalize(order.getRestaurantId()));
-        assignment.setCourierId(courierId);
-        assignment.setStatus(DeliveryStatus.ASSIGNED);
-        assignment.setEstimatedDeliveryAt(
-                estimatedDeliveryAt != null ? estimatedDeliveryAt : now + 30 * 60 * 1000L
+        task.assignTo(
+                courierId,
+                estimatedDeliveryAt != null ? estimatedDeliveryAt : now + 30 * 60 * 1000L,
+                trimToNull(deliveryNote)
         );
-        assignment.setDeliveryNote(trimToNull(deliveryNote));
-
-        DeliveryAssignment saved = assignmentRepository.save(assignment);
+        DeliveryAssignment saved = assignmentRepository.save(task);
         customerNotificationService.courierAssigned(
                 order, courier.getName(), saved.getEstimatedDeliveryAt()
         );
@@ -95,13 +94,16 @@ public class DeliveryAssignmentService {
     }
 
     @Transactional
-    public DeliveryAssignment startDelivery(String assignmentId) {
+    public DeliveryAssignment startDelivery(String assignmentId, String adminId) {
+        if (adminId == null || adminId.isBlank()) {
+            throw new IllegalArgumentException("Thiếu mã Admin điều phối giao hàng");
+        }
         DeliveryAssignment assignment = requireAssignment(assignmentId);
         assignment.start();
         DeliveryAssignment saved = assignmentRepository.save(assignment);
         orderService.updateStatus(
-                saved.getOrderId(), OrderStatus.DELIVERING, saved.getRestaurantId(),
-                "RESTAURANT", "DELIVERY_PROCESS", "Nhân viên giao hàng bắt đầu giao"
+                saved.getOrderId(), OrderStatus.DELIVERING, adminId.trim(),
+                "ADMIN", "ADMIN_DISPATCH", "Quản trị viên xác nhận shipper bắt đầu giao"
         );
         realtimeService.sendDeliveryUpdate(saved);
         return saved;
@@ -167,14 +169,20 @@ public class DeliveryAssignmentService {
     }
 
     @Transactional
-    public DeliveryAssignment failDelivery(String assignmentId, String reason) {
+    public DeliveryAssignment failDelivery(String assignmentId, String reason, String adminId) {
+        if (adminId == null || adminId.isBlank()) {
+            throw new IllegalArgumentException("Thiếu mã Admin điều phối giao hàng");
+        }
         DeliveryAssignment assignment = requireAssignment(assignmentId);
         assignment.fail(reason);
         DeliveryAssignment saved = assignmentRepository.save(assignment);
         orderService.updateStatus(
-                saved.getOrderId(), OrderStatus.READY, saved.getRestaurantId(),
-                "RESTAURANT", "DELIVERY_FAILED", reason
+                saved.getOrderId(), OrderStatus.READY, adminId.trim(),
+                "ADMIN", "DELIVERY_FAILED", reason
         );
+        // Giữ failedAt/failureReason để truy vết nhưng trả chính nhiệm vụ này về hàng đợi.
+        saved.reopenWaiting();
+        saved = assignmentRepository.save(saved);
         realtimeService.sendDeliveryUpdate(saved);
         return saved;
     }
@@ -198,8 +206,14 @@ public class DeliveryAssignmentService {
         return assignmentRepository.findByRestaurantIdOrderByAssignedAtDesc(restaurantId);
     }
 
+    @Transactional
+    public List<DeliveryAssignment> findAdminQueue() {
+        return deliveryTaskService.listQueue();
+    }
+
     @Transactional(readOnly = true)
     public RestaurantCourier findCourier(String courierId) {
+        if (courierId == null || courierId.isBlank()) return null;
         return courierRepository.findById(courierId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy nhân viên giao hàng: " + courierId));
     }
@@ -212,10 +226,6 @@ public class DeliveryAssignmentService {
     private DeliveryAssignment requireAssignment(String assignmentId) {
         return assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phân công giao hàng: " + assignmentId));
-    }
-
-    private boolean isActive(DeliveryStatus status) {
-        return status == DeliveryStatus.ASSIGNED || status == DeliveryStatus.DELIVERING;
     }
 
     private String trimToNull(String value) {

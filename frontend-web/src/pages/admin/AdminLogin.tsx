@@ -97,30 +97,6 @@ const ErrorMessage = styled.div`
   margin-top: 10px;
 `;
 
-const CredentialsBox = styled.div`
-  margin-top: 24px;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border-left: 4px solid #007bff;
-`;
-
-const CredentialsTitle = styled.h4`
-  margin: 0 0 8px 0;
-  color: #495057;
-  font-size: 14px;
-`;
-
-const CredentialsList = styled.div`
-  color: #6c757d;
-  font-size: 12px;
-  line-height: 1.4;
-  
-  strong {
-    color: #495057;
-  }
-`;
-
 const BackToHome = styled.div`
   text-align: center;
   margin-top: 20px;
@@ -191,13 +167,6 @@ const AdminLogin: React.FC = () => {
           </Button>
           {error && <ErrorMessage>{error.includes('Invalid') || error.includes('credentials') ? 'Thông tin đăng nhập không hợp lệ' : error}</ErrorMessage>}
         </Form>
-
-        <CredentialsBox>
-          <CredentialsTitle>🔐 Tài khoản quản trị viên:</CredentialsTitle>
-          <CredentialsList>
-            <div><strong>Tên đăng nhập:</strong> admin / admin123</div>
-          </CredentialsList>
-        </CredentialsBox>
 
         <BackToHome>
           <a href="/">← Quay về trang chủ</a>

@@ -2,6 +2,7 @@ package com.foodfast.controller;
 
 import com.foodfast.dto.AssignDeliveryRequest;
 import com.foodfast.dto.DeliveryDetailsResponse;
+import com.foodfast.dto.AdminDeliveryQueueResponse;
 import com.foodfast.dto.FailDeliveryRequest;
 import com.foodfast.dto.RestaurantCompleteDeliveryRequest;
 import com.foodfast.entity.DeliveryAssignment;
@@ -38,12 +39,11 @@ public class DeliveryController {
         this.currentUserService = currentUserService;
     }
 
-    @PostMapping("/deliveries/assign")
+    @PostMapping("/admin/deliveries/assign")
     public ResponseEntity<DeliveryDetailsResponse> assign(
             @RequestBody @Valid AssignDeliveryRequest request
     ) {
-        currentUserService.requireOrderAccess(orderService.findById(request.orderId())
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng")));
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được phân phối shipper");
         DeliveryAssignment assignment = deliveryService.assignDelivery(
                 request.orderId(),
                 request.courierId(),
@@ -51,6 +51,17 @@ public class DeliveryController {
                 request.deliveryNote()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(assignment));
+    }
+
+    @GetMapping("/admin/deliveries/queue")
+    public List<AdminDeliveryQueueResponse> adminQueue() {
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được xem hàng đợi giao hàng");
+        return deliveryService.findAdminQueue().stream().map(assignment -> {
+            var order = orderService.findById(assignment.getOrderId())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng"));
+            return AdminDeliveryQueueResponse.from(
+                    order, assignment, deliveryService.findCourier(assignment.getCourierId()));
+        }).toList();
     }
 
     @GetMapping("/deliveries/order/{orderId}")
@@ -72,10 +83,11 @@ public class DeliveryController {
                 .toList();
     }
 
-    @PostMapping("/deliveries/{assignmentId}/start")
+    @PostMapping("/admin/deliveries/{assignmentId}/start")
     public DeliveryDetailsResponse start(@PathVariable String assignmentId) {
-        requireAssignmentAccess(assignmentId);
-        return toResponse(deliveryService.startDelivery(assignmentId));
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được điều phối giao hàng");
+        return toResponse(deliveryService.startDelivery(
+                assignmentId, currentUserService.requireUser().getId()));
     }
 
     @PostMapping("/deliveries/{assignmentId}/customer-confirm")
@@ -86,39 +98,20 @@ public class DeliveryController {
         ));
     }
 
-    @PostMapping("/restaurants/{restaurantId}/deliveries/{assignmentId}/complete-override")
-    public DeliveryDetailsResponse completeByRestaurantOverride(
-            @PathVariable String restaurantId,
-            @PathVariable String assignmentId,
-            @RequestBody @Valid RestaurantCompleteDeliveryRequest request
-    ) {
-        currentUserService.requireRestaurantAccess(restaurantId);
-        requireAssignmentAccess(assignmentId);
-        return toResponse(deliveryService.completeByRestaurantOverride(
-                restaurantId,
-                assignmentId,
-                request.reason()
-        ));
-    }
-
-    @PostMapping("/deliveries/{assignmentId}/fail")
+    @PostMapping("/admin/deliveries/{assignmentId}/fail")
     public DeliveryDetailsResponse fail(
             @PathVariable String assignmentId,
             @RequestBody @Valid FailDeliveryRequest request
     ) {
-        requireAssignmentAccess(assignmentId);
-        return toResponse(deliveryService.failDelivery(assignmentId, request.reason()));
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được điều phối giao hàng");
+        return toResponse(deliveryService.failDelivery(
+                assignmentId, request.reason(), currentUserService.requireUser().getId()));
     }
 
-    @PostMapping("/deliveries/{assignmentId}/cancel")
+    @PostMapping("/admin/deliveries/{assignmentId}/cancel")
     public DeliveryDetailsResponse cancel(@PathVariable String assignmentId) {
-        requireAssignmentAccess(assignmentId);
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được điều phối giao hàng");
         return toResponse(deliveryService.cancelDelivery(assignmentId));
-    }
-
-    private void requireAssignmentAccess(String assignmentId) {
-        currentUserService.requireRestaurantAccess(
-                deliveryService.findById(assignmentId).getRestaurantId());
     }
 
     private DeliveryDetailsResponse toResponse(DeliveryAssignment assignment) {

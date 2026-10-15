@@ -6,8 +6,27 @@ Write-Host "FoodFast Backend Startup Script" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Step 1: Kill any process using port 8080
-Write-Host "[1/3] Checking for processes using port 8080..." -ForegroundColor Yellow
+# Step 1: Verify MySQL
+Write-Host "[1/4] Checking MySQL84..." -ForegroundColor Yellow
+$mysqlService = Get-Service -Name MySQL84 -ErrorAction SilentlyContinue
+if (-not $mysqlService) {
+    Write-Host "MySQL84 is not installed. Install and configure MySQL before starting FoodFast." -ForegroundColor Red
+    exit 1
+}
+if ($mysqlService.Status -ne 'Running') {
+    try {
+        Start-Service -Name MySQL84 -ErrorAction Stop
+        Write-Host "MySQL84 started." -ForegroundColor Green
+    } catch {
+        Write-Host "Cannot start MySQL84. Open PowerShell as Administrator once or start it in Windows Services." -ForegroundColor Red
+        exit 1
+    }
+}
+Write-Host "MySQL84 is running." -ForegroundColor Green
+Write-Host ""
+
+# Step 2: Kill any process using port 8080
+Write-Host "[2/4] Checking for processes using port 8080..." -ForegroundColor Yellow
 $processes = netstat -ano | findstr :8080 | findstr LISTENING
 
 if ($processes) {
@@ -24,8 +43,8 @@ if ($processes) {
 }
 Write-Host ""
 
-# Step 2: Compile project
-Write-Host "[2/3] Compiling project..." -ForegroundColor Yellow
+# Step 3: Compile project
+Write-Host "[3/4] Compiling project..." -ForegroundColor Yellow
 & mvn clean compile -q
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Compilation failed!" -ForegroundColor Red
@@ -34,7 +53,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Compilation successful." -ForegroundColor Green
 Write-Host ""
 
-# Step 3: Start Spring Boot
-Write-Host "[3/3] Starting Spring Boot backend on port 8080..." -ForegroundColor Yellow
+# Step 4: Start Spring Boot
+Write-Host "[4/4] Starting Spring Boot backend on port 8080 with MySQL..." -ForegroundColor Yellow
 & mvn spring-boot:run
 

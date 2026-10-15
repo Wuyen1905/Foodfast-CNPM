@@ -38,12 +38,20 @@ public class RestaurantCourierService {
                 : courierRepository.findByRestaurantIdOrderByNameAsc(restaurantId);
     }
 
+    @Transactional(readOnly = true)
+    public List<RestaurantCourier> listAll(boolean activeOnly) {
+        return activeOnly
+                ? courierRepository.findByActiveTrueOrderByNameAsc()
+                : courierRepository.findAllByOrderByNameAsc();
+    }
+
     @Transactional
     public RestaurantCourier create(String restaurantId, RestaurantCourier courier) {
-        requireRestaurant(restaurantId);
+        if (restaurantId != null && !restaurantId.isBlank()) requireRestaurant(restaurantId);
         validateRequiredFields(courier);
         courier.setId(null);
-        courier.setRestaurantId(restaurantId);
+        courier.setRestaurantId(restaurantId == null || restaurantId.isBlank()
+                ? null : RestaurantIdentityPolicy.canonicalize(restaurantId));
         courier.setActive(true);
         return courierRepository.save(courier);
     }
@@ -55,6 +63,15 @@ public class RestaurantCourierService {
         if (changes.getPhone() != null) courier.setPhone(changes.getPhone().trim());
         if (changes.getVehicleType() != null) courier.setVehicleType(changes.getVehicleType().trim());
         if (changes.getLicensePlate() != null) courier.setLicensePlate(changes.getLicensePlate().trim());
+        if (changes.getRestaurantId() != null) {
+            String restaurantId = changes.getRestaurantId().trim();
+            if (restaurantId.isBlank()) {
+                courier.setRestaurantId(null);
+            } else {
+                requireRestaurant(restaurantId);
+                courier.setRestaurantId(RestaurantIdentityPolicy.canonicalize(restaurantId));
+            }
+        }
         if (active != null) {
             if (!active && assignmentRepository.existsByCourierIdAndStatusIn(courierId, ACTIVE_DELIVERY_STATUSES)) {
                 throw new IllegalStateException("Không thể ngừng hoạt động nhân viên đang có đơn giao");

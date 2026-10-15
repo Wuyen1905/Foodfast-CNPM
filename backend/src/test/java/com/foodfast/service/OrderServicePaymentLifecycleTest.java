@@ -29,6 +29,8 @@ class OrderServicePaymentLifecycleTest {
     @Mock private VoucherService voucherService;
     @Mock private OrderStatusHistoryService orderStatusHistoryService;
     @Mock private CustomerNotificationService customerNotificationService;
+    @Mock private DeliveryTaskService deliveryTaskService;
+    @Mock private OrderGroupPaymentService orderGroupPaymentService;
 
     private OrderService orderService;
 
@@ -43,7 +45,9 @@ class OrderServicePaymentLifecycleTest {
                 optionPricingService,
                 voucherService,
                 orderStatusHistoryService,
-                customerNotificationService
+                customerNotificationService,
+                deliveryTaskService,
+                orderGroupPaymentService
         );
         when(orderRepository.save(any(Order.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

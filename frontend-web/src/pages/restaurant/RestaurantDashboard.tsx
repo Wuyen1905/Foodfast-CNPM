@@ -9,7 +9,6 @@ import toast from 'react-hot-toast';
 import QuickStats from '@/components/restaurant/QuickStats';
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import OrderTracking from '@/components/restaurant/OrderTracking';
-import CourierManagement from '@/components/restaurant/CourierManagement';
 import RestaurantOperations from '@/components/restaurant/RestaurantOperations';
 import SupportTicketInbox from '@/components/SupportTicketInbox';
 import ComplaintInbox from '@/components/ComplaintInbox';
@@ -185,7 +184,7 @@ const WelcomeText = styled.div`
   }
 `;
 
-type TabType = 'overview' | 'operations' | 'orders' | 'couriers' | 'support';
+type TabType = 'overview' | 'operations' | 'orders' | 'support';
 
 const RestaurantDashboard: React.FC = () => {
   const auth = useAuth();
@@ -320,7 +319,6 @@ const RestaurantDashboard: React.FC = () => {
     { id: 'overview' as TabType, icon: '📊', label: 'Tổng quan' },
     { id: 'operations' as TabType, icon: '🕒', label: 'Hoạt động' },
     { id: 'orders' as TabType, icon: '📦', label: 'Đơn hàng' },
-    { id: 'couriers' as TabType, icon: '🛵', label: 'Nhân viên giao hàng' },
     { id: 'support' as TabType, icon: '🎫', label: 'Hỗ trợ & khiếu nại' },
   ];
 
@@ -353,12 +351,6 @@ const RestaurantDashboard: React.FC = () => {
               restaurantId={user?.restaurantId || ''}
               primary={restaurantTheme.primary}
             />
-          </div>
-        );
-      case 'couriers':
-        return (
-          <div style={{ padding: '24px' }}>
-            <CourierManagement restaurantId={user?.restaurantId || user?.id} theme={restaurantTheme} />
           </div>
         );
       case 'support':

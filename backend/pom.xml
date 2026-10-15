@@ -43,11 +43,24 @@
             <artifactId>flyway-core</artifactId>
         </dependency>
 
-        <!-- Persistent file database for local runtime; tests use an isolated in-memory URL -->
+        <!-- MySQL support is split into its own Flyway database module. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
+        <!-- Runtime database for development and production. -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Fast, isolated database used only by automated tests. -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
         
         <!-- Spring Boot Validation -->

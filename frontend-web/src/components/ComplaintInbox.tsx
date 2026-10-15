@@ -5,12 +5,10 @@ import {
   COMPLAINT_CATEGORY_LABELS,
   COMPLAINT_STATUS_LABELS,
   Complaint,
-  completeComplaintRefund,
   listComplaints,
   openComplaintEvidence,
   reviewComplaint,
 } from '@/api/complaintApi';
-import { formatVND } from '@/utils/currency';
 
 interface Props {
   role: 'RESTAURANT' | 'ADMIN';
@@ -42,8 +40,6 @@ const actionButton = (background: string, disabled: boolean): React.CSSPropertie
 const ComplaintInbox: React.FC<Props> = ({ role, viewerId }) => {
   const [items, setItems] = useState<Complaint[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
-  const [amounts, setAmounts] = useState<Record<string, number>>({});
-  const [references, setReferences] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = async () => {
@@ -51,39 +47,22 @@ const ComplaintInbox: React.FC<Props> = ({ role, viewerId }) => {
     try {
       setItems(await listComplaints());
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Không thể tải danh sách khiếu nại');
+      toast.error(error?.response?.data?.message || 'Không thể tải báo cáo sự cố');
     }
   };
   useEffect(() => { void load(); }, [role, viewerId]);
 
-  const review = async (item: Complaint, action: 'START_REVIEW' | 'APPROVE_REFUND' | 'REJECT') => {
+  const review = async (item: Complaint, action: 'START_REVIEW' | 'RESOLVE' | 'REJECT') => {
     setBusy(item.id);
     try {
       await reviewComplaint(item.id, {
         action,
         note: notes[item.id],
-        approvedRefundAmount: amounts[item.id] ?? item.requestedRefundAmount,
       });
       toast.success('Đã cập nhật kết quả xử lý');
       await load();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Không thể cập nhật khiếu nại');
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const completeRefund = async (item: Complaint) => {
-    setBusy(item.id);
-    try {
-      await completeComplaintRefund(item.id, {
-        transactionReference: references[item.id] || '',
-        note: notes[item.id],
-      });
-      toast.success('Đã ghi nhận hoàn tiền thành công');
-      await load();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Không thể hoàn tất hoàn tiền');
+      toast.error(error?.response?.data?.message || 'Không thể cập nhật báo cáo sự cố');
     } finally {
       setBusy(null);
     }
@@ -91,8 +70,8 @@ const ComplaintInbox: React.FC<Props> = ({ role, viewerId }) => {
 
   return (
     <section style={{ marginTop: 24 }}>
-      <h3>🛟 Khiếu nại và hoàn tiền ({items.length})</h3>
-      {items.length === 0 && <div style={{ color: 'var(--secondaryText)' }}>Chưa có khiếu nại nào.</div>}
+      <h3>🛟 Báo cáo sự cố đơn hàng ({items.length})</h3>
+      {items.length === 0 && <div style={{ color: 'var(--secondaryText)' }}>Chưa có báo cáo sự cố nào.</div>}
       {items.map(item => {
         const terminal = item.status === 'RESOLVED' || item.status === 'REJECTED';
         return (
@@ -100,11 +79,6 @@ const ComplaintInbox: React.FC<Props> = ({ role, viewerId }) => {
             <b>{item.id} · Đơn {item.orderId}</b>
             <div style={{ marginTop: 6 }}>{COMPLAINT_CATEGORY_LABELS[item.category]} · {COMPLAINT_STATUS_LABELS[item.status]}</div>
             <div style={{ marginTop: 6 }}>{item.description}</div>
-            <div style={{ marginTop: 6 }}>
-              {item.requestedRefundAmount > 0
-                ? <>Khách đề nghị hoàn: <b>{formatVND(item.requestedRefundAmount)}</b></>
-                : 'Khách yêu cầu kiểm tra và phản hồi, chưa đề nghị hoàn tiền'}
-            </div>
             {item.evidenceUrls.length > 0 && (
               <div style={{ marginTop: 6 }}>
                 Bằng chứng: {item.evidenceUrls.map((url, index) => (
@@ -119,18 +93,10 @@ const ComplaintInbox: React.FC<Props> = ({ role, viewerId }) => {
                 <textarea
                   value={notes[item.id] || ''}
                   onChange={event => setNotes(current => ({ ...current, [item.id]: event.target.value }))}
-                  placeholder="Kết luận xử lý (ít nhất 10 ký tự khi duyệt hoặc từ chối)"
+                  placeholder="Nhập kết quả xử lý rõ ràng (ít nhất 10 ký tự)"
                   rows={2}
                   style={{ width: '100%', boxSizing: 'border-box', marginTop: 10, padding: 10, border: '1px solid var(--border)', borderRadius: 8 }}
                 />
-                <label style={{ display: 'block', marginTop: 10, fontWeight: 700 }}>
-                  Số tiền nhà hàng đề xuất hoàn
-                  <input
-                    type="number" min={0} value={amounts[item.id] ?? item.requestedRefundAmount}
-                    onChange={event => setAmounts(current => ({ ...current, [item.id]: Number(event.target.value) }))}
-                    style={{ display: 'block', width: 220, marginTop: 5, padding: 9, border: '1px solid var(--border)', borderRadius: 8 }}
-                  />
-                </label>
                 <div style={{ marginTop: 16 }}>
                   <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 700, color: 'var(--secondaryText)' }}>
                     Thao tác xử lý
@@ -154,10 +120,10 @@ const ComplaintInbox: React.FC<Props> = ({ role, viewerId }) => {
                     <button
                       type="button"
                       disabled={busy === item.id}
-                      onClick={() => review(item, 'APPROVE_REFUND')}
+                      onClick={() => review(item, 'RESOLVE')}
                       style={actionButton('#16a34a', busy === item.id)}
                     >
-                      ✓ Duyệt kết quả / hoàn tiền
+                      ✓ Hoàn tất xử lý
                     </button>
                     <button
                       type="button"
@@ -170,27 +136,13 @@ const ComplaintInbox: React.FC<Props> = ({ role, viewerId }) => {
                   </div>
                   {busy === item.id && (
                     <div style={{ marginTop: 8, fontSize: 13, color: 'var(--secondaryText)' }}>
-                      Đang cập nhật khiếu nại, vui lòng chờ...
+                      Đang cập nhật báo cáo sự cố, vui lòng chờ...
                     </div>
                   )}
                 </div>
               </>
             )}
             {item.resolution && <div style={{ marginTop: 8 }}>Kết luận: {item.resolution}</div>}
-            {item.approvedRefundAmount > 0 && <div>Đã duyệt hoàn: {formatVND(item.approvedRefundAmount)} · {item.refundStatus}</div>}
-            {role === 'ADMIN' && item.refundStatus === 'PENDING' && (
-              <div style={{ marginTop: 10 }}>
-                <input
-                  value={references[item.id] || ''}
-                  onChange={event => setReferences(current => ({ ...current, [item.id]: event.target.value }))}
-                  placeholder="Mã giao dịch hoàn tiền"
-                  style={{ padding: 9, border: '1px solid var(--border)', borderRadius: 8 }}
-                />
-                <button type="button" disabled={busy === item.id || !references[item.id]?.trim()} onClick={() => completeRefund(item)} style={{ marginLeft: 8 }}>
-                  Xác nhận đã hoàn tiền
-                </button>
-              </div>
-            )}
             <details style={{ marginTop: 10 }}>
               <summary>Nhật ký ({item.history.length})</summary>
               {item.history.map(history => (

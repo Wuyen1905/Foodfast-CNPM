@@ -5,6 +5,7 @@ import com.foodfast.dto.VoucherUpsertRequest;
 import com.foodfast.entity.Voucher;
 import com.foodfast.entity.VoucherDiscountType;
 import com.foodfast.entity.VoucherRedemptionStatus;
+import com.foodfast.entity.VoucherScope;
 import com.foodfast.exception.ForbiddenOperationException;
 import com.foodfast.repository.RestaurantRepository;
 import com.foodfast.repository.VoucherRedemptionRepository;
@@ -117,16 +118,27 @@ public class VoucherManagementService {
             throw new IllegalArgumentException("Thời gian kết thúc phải sau thời gian bắt đầu");
         }
 
+        VoucherScope scope = request.scope();
+        if (scope == null) {
+            scope = StringUtils.hasText(request.restaurantId())
+                    ? VoucherScope.RESTAURANT : VoucherScope.GLOBAL;
+        }
+        if (!admin && scope == VoucherScope.GLOBAL) {
+            throw new ForbiddenOperationException("Chỉ quản trị viên được tạo mã áp dụng toàn hệ thống");
+        }
+
         String targetRestaurant;
         if (admin) {
-            targetRestaurant = StringUtils.hasText(request.restaurantId())
+            targetRestaurant = scope == VoucherScope.RESTAURANT
                     ? requireRestaurant(request.restaurantId()) : null;
         } else {
             targetRestaurant = requireRestaurant(authenticatedRestaurantId);
+            scope = VoucherScope.RESTAURANT;
         }
 
         voucher.setName(name);
         voucher.setRestaurantId(targetRestaurant);
+        voucher.setScope(scope);
         voucher.setDiscountType(type);
         voucher.setDiscountValue(value);
         voucher.setMinOrderAmount(minimum);

@@ -36,9 +36,6 @@ public class ComplaintHistory {
     @Column(length = 1200)
     private String note;
 
-    @Column(name = "refund_amount", nullable = false)
-    private int refundAmount;
-
     @Column(name = "created_at", nullable = false)
     private long createdAt;
 
@@ -60,7 +57,5 @@ public class ComplaintHistory {
     public void setToStatus(String toStatus) { this.toStatus = toStatus; }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
-    public int getRefundAmount() { return refundAmount; }
-    public void setRefundAmount(int refundAmount) { this.refundAmount = Math.max(0, refundAmount); }
     public long getCreatedAt() { return createdAt; }
 }

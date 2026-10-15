@@ -1,6 +1,6 @@
 package com.foodfast.controller;
 
-import com.foodfast.dto.CreateCourierRequest;
+import com.foodfast.dto.AdminCourierRequest;
 import com.foodfast.dto.UpdateCourierRequest;
 import com.foodfast.entity.RestaurantCourier;
 import com.foodfast.service.RestaurantCourierService;
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/admin/couriers")
 public class RestaurantCourierController {
 
     private final RestaurantCourierService courierService;
@@ -35,36 +35,34 @@ public class RestaurantCourierController {
         this.currentUserService = currentUserService;
     }
 
-    @GetMapping("/restaurants/{restaurantId}/couriers")
+    @GetMapping
     public List<RestaurantCourier> listCouriers(
-            @PathVariable String restaurantId,
             @RequestParam(defaultValue = "false") boolean activeOnly
     ) {
-        currentUserService.requireRestaurantAccess(restaurantId);
-        return courierService.listByRestaurant(restaurantId, activeOnly);
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được quản lý shipper");
+        return courierService.listAll(activeOnly);
     }
 
-    @PostMapping("/restaurants/{restaurantId}/couriers")
+    @PostMapping
     public ResponseEntity<RestaurantCourier> createCourier(
-            @PathVariable String restaurantId,
-            @RequestBody @Valid CreateCourierRequest request
+            @RequestBody @Valid AdminCourierRequest request
     ) {
-        currentUserService.requireRestaurantAccess(restaurantId);
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được quản lý shipper");
         RestaurantCourier courier = new RestaurantCourier();
         courier.setName(request.name());
         courier.setPhone(request.phone());
         courier.setVehicleType(request.vehicleType());
         courier.setLicensePlate(request.licensePlate());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(courierService.create(restaurantId, courier));
+                .body(courierService.create(request.restaurantId(), courier));
     }
 
-    @PatchMapping("/couriers/{courierId}")
+    @PatchMapping("/{courierId}")
     public RestaurantCourier updateCourier(
             @PathVariable String courierId,
             @RequestBody @Valid UpdateCourierRequest request
     ) {
-        currentUserService.requireRestaurantAccess(courierService.findById(courierId).getRestaurantId());
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được quản lý shipper");
         RestaurantCourier changes = new RestaurantCourier();
         changes.setName(request.name());
         changes.setPhone(request.phone());
@@ -73,9 +71,9 @@ public class RestaurantCourierController {
         return courierService.update(courierId, changes, request.active());
     }
 
-    @DeleteMapping("/couriers/{courierId}")
+    @DeleteMapping("/{courierId}")
     public ResponseEntity<Void> deactivateCourier(@PathVariable String courierId) {
-        currentUserService.requireRestaurantAccess(courierService.findById(courierId).getRestaurantId());
+        if (!currentUserService.isAdmin()) throw new com.foodfast.exception.ForbiddenOperationException("Chỉ Admin được quản lý shipper");
         courierService.deactivate(courierId);
         return ResponseEntity.noContent().build();
     }

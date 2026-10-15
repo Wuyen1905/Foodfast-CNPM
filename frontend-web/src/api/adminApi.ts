@@ -5,6 +5,31 @@ export type RestaurantLifecycleStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'CL
 export type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 export type SupportDepartment = 'CUSTOMER_SERVICE' | 'OPERATIONS' | 'FINANCE';
 export type SupportTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+export type ManagerPermission = 'ORDER_MANAGEMENT' | 'CUSTOMER_SUPPORT' | 'PAYMENT_RECONCILIATION' | 'RESTAURANT_SETTLEMENT';
+
+export interface AdminManager {
+  id: string;
+  username: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  role: 'manager';
+  active: boolean;
+  permissions: ManagerPermission[];
+  createdAt?: number;
+  lastLoginAt?: number;
+  suspensionReason?: string;
+  accountStatusUpdatedAt?: number;
+}
+
+export interface ManagerAccountInput {
+  username: string;
+  password?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  permissions: ManagerPermission[];
+}
 
 export interface AdminRestaurant {
   id: string;
@@ -62,6 +87,7 @@ export interface AdminOverview {
   reconciliationOrderIds: string[];
   openComplaints: number;
   pendingRefunds: number;
+  pendingRefundOrderIds: string[];
   pendingRestaurants: number;
   openSupportTickets: number;
   overdueSupportTickets: number;
@@ -131,7 +157,7 @@ export interface AdminCustomerDetails extends AdminCustomer {
   username?: string;
   orders: AdminOrderSummary[];
   payments: Array<{ orderId: string; method?: string; status?: string; amount: number; transactionId?: string; createdAt: number }>;
-  complaints: Array<{ id: string; orderId: string; category: string; status: string; refundStatus?: string; approvedRefundAmount?: number; createdAt: number }>;
+  complaints: Array<{ id: string; orderId: string; category: string; status: string; createdAt: number }>;
   addresses: Array<{ id: string; label?: string; recipientName: string; phone: string; addressLine: string; defaultAddress: boolean }>;
 }
 
@@ -160,8 +186,6 @@ export interface AdminSupportQueueItem {
   assignedName?: string;
   slaDueAt?: number;
   overdue: boolean;
-  refundStatus?: string;
-  approvedRefundAmount?: number;
   createdAt: number;
   history: SupportHistoryItem[];
 }
@@ -200,6 +224,26 @@ export const getAllCustomers = async (): Promise<AdminCustomer[]> => {
   }));
 };
 
+export const getAllManagers = async (): Promise<AdminManager[]> => {
+  const { data } = await apiClient.get('/admin/managers');
+  return Array.isArray(data) ? data : [];
+};
+
+export const createManager = async (input: ManagerAccountInput): Promise<AdminManager> => {
+  const { data } = await apiClient.post('/admin/managers', input);
+  return data;
+};
+
+export const updateManager = async (id: string, input: ManagerAccountInput): Promise<AdminManager> => {
+  const { data } = await apiClient.put(`/admin/managers/${id}`, input);
+  return data;
+};
+
+export const setManagerActive = async (id: string, active: boolean, reason?: string): Promise<AdminManager> => {
+  const { data } = await apiClient.patch(`/admin/managers/${id}/status`, { active, reason });
+  return data;
+};
+
 export const getAdminStats = async (): Promise<AdminStats> => {
   const { data } = await apiClient.get('/admin/stats');
   return {
@@ -221,6 +265,7 @@ export const getAdminOverview = async (): Promise<AdminOverview> => {
     paymentReconciliationNeeded: data.paymentReconciliationNeeded || 0,
     reconciliationOrderIds: data.reconciliationOrderIds || [],
     openComplaints: data.openComplaints || 0, pendingRefunds: data.pendingRefunds || 0,
+    pendingRefundOrderIds: data.pendingRefundOrderIds || [],
     pendingRestaurants: data.pendingRestaurants || 0, openSupportTickets: data.openSupportTickets || 0,
     overdueSupportTickets: data.overdueSupportTickets || 0
   };

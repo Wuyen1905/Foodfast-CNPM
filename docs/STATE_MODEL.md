@@ -17,8 +17,8 @@ DELIVERING -> READY khi lần giao thất bại và cần phân công lại
 | `PENDING` | Đơn đã tạo, đang chờ nhà hàng tiếp nhận | Nhà hàng xác nhận; khách/nhà hàng hủy theo chính sách |
 | `CONFIRMED` | Nhà hàng đã nhận đơn | Nhà hàng bắt đầu chuẩn bị |
 | `PREPARING` | Bếp đang chuẩn bị | Nhà hàng đánh dấu sẵn sàng |
-| `READY` | Món đã sẵn sàng, có thể phân công giao | Nhà hàng phân công và bắt đầu giao |
-| `DELIVERING` | Nhân viên đang giao | Khách xác nhận nhận; nhà hàng hoàn tất ngoại lệ; hoặc báo thất bại |
+| `READY` | Món đã sẵn sàng, nhiệm vụ vào hàng đợi giao | Quản trị viên phân công và xác nhận bắt đầu giao |
+| `DELIVERING` | Shipper đang giao | Khách xác nhận nhận; nhà hàng hoàn tất ngoại lệ; hoặc quản trị viên báo thất bại |
 | `DELIVERED` | Đơn hoàn tất | Trạng thái kết thúc |
 | `CANCELLED` | Đơn bị hủy/từ chối có lý do | Trạng thái kết thúc |
 
@@ -29,15 +29,16 @@ Quy ước biểu diễn: Java/H2 dùng enum chữ hoa; JSON gửi cho web dùng
 ## 2. Trạng thái phân công giao hàng (`DeliveryStatus`)
 
 ```text
-ASSIGNED -> DELIVERING -> DELIVERED
-     |            |
-     +------------+-> FAILED
-     +------------+-> CANCELLED
+WAITING -> ASSIGNED -> DELIVERING -> DELIVERED
+   |          |            |
+   +----------+------------+-> CANCELLED
+              +------------+-> FAILED -> WAITING
 ```
 
-- `ASSIGNED`: đã chọn nhân viên nhưng người giao chưa xuất phát.
+- `WAITING`: đơn con đã sẵn sàng và đang chờ quản trị viên chọn shipper.
+- `ASSIGNED`: quản trị viên đã chọn shipper nhưng người giao chưa xuất phát.
 - `DELIVERING`: đã nhận món và bắt đầu giao; lúc này `OrderStatus` mới chuyển sang `DELIVERING`.
-- `FAILED`: phải có lý do; `OrderStatus` quay lại `READY` để phân công lại.
+- `FAILED`: phải có lý do; hệ thống lưu dấu vết rồi đưa chính nhiệm vụ về `WAITING`, đồng thời `OrderStatus` quay lại `READY`.
 - `DELIVERED`: chỉ hoàn tất khi khách xác nhận hoặc nhà hàng dùng ngoại lệ sau ETA 60 phút và có lý do.
 
 ## 3. Trạng thái thanh toán (`PaymentStatus`)
@@ -59,7 +60,8 @@ paid -> partial_refund_pending -> partial_refunded
 ## 4. Quan hệ giữa ba vòng đời
 
 1. VNPay phải `paid` trước khi nhà hàng thấy và xử lý đơn; COD được tiếp nhận ngay.
-2. Chỉ `OrderStatus.READY` mới được tạo `DeliveryStatus.ASSIGNED`.
-3. `ASSIGNED` không làm đổi `OrderStatus`; chỉ khi bắt đầu giao mới chuyển đơn sang `DELIVERING`.
-4. Giao thất bại kết thúc lượt phân công hiện tại và đưa đơn về `READY`.
-5. Hoàn tiền thuộc thanh toán, không biến đơn `DELIVERED` thành trạng thái chế biến trước đó.
+2. Khi đơn con đạt `OrderStatus.READY`, hệ thống tạo đúng một nhiệm vụ `DeliveryStatus.WAITING`.
+3. Chỉ quản trị viên được chuyển nhiệm vụ từ `WAITING` sang `ASSIGNED`; việc phân công chưa làm đổi `OrderStatus`.
+4. Khi quản trị viên xác nhận bắt đầu giao, nhiệm vụ và đơn mới cùng chuyển sang `DELIVERING`.
+5. Giao thất bại lưu lý do, đưa nhiệm vụ về `WAITING` và đơn về `READY` để phân công lại.
+6. Hoàn tiền thuộc thanh toán, không biến đơn `DELIVERED` thành trạng thái chế biến trước đó.
